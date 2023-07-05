@@ -1,0 +1,50 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    alb.ingress.kubernetes.io/certificate-arn: {{ .Values.certificate_arn }}
+    alb.ingress.kubernetes.io/group.name: "{{ .Values.repo_name }}-external"
+    alb.ingress.kubernetes.io/healthcheck-path: {{ .Values.health_path }}
+    alb.ingress.kubernetes.io/listen-ports: "[{\"HTTP\": 80}, {\"HTTPS\":443}]"
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/security-groups: {{ .Values.security_groups | quote }}
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/subnets: {{ .Values.subnets | quote }}
+    alb.ingress.kubernetes.io/target-type: "ip"
+  labels:
+    app: "{{ .Values.repo_name }}-{{ .Values.environment }}"
+  name: "{{ .Values.repo_name }}-{{ .Values.environment }}-ingress"
+  namespace: "{{ .Values.repo_name }}-{{ .Values.environment }}"
+spec:
+  ingressClassName: alb
+  rules:
+    - host: "eks-{{ .Values.repo_name }}-{{ .Values.environment }}-{{ .Values.region_name }}.{{ .Values.route53_zone_name }}"
+      http:
+        paths:
+        - backend:
+            service:
+              name: "{{ .Values.repo_name }}-{{ .Values.environment }}-service"
+              port:
+                number: 80
+          path: /*
+          pathType: ImplementationSpecific
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: "{{ .Values.repo_name }}-{{ .Values.environment }}-service"
+  namespace: "{{ .Values.repo_name }}-{{ .Values.environment }}"
+spec:
+  ports:
+  - port: 80
+    name: http
+    protocol: TCP
+    targetPort: {{ .Values.target_port }}
+  selector:
+    app: "{{ .Values.repo_name }}-{{ .Values.environment }}"
+  sessionAffinity: None
+  type: ClusterIP
+
+---

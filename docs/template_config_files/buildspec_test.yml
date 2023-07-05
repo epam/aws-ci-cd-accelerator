@@ -1,0 +1,81 @@
+# Buildspec file for SonarCloud test launch.
+version: 0.2
+env:
+  parameter-store:        # it's better to use secrets manager here
+    LOGIN: "$SONAR_TOKEN"
+    RP_TOKEN: "$RP_TOKEN_NAME"
+  variables:
+    ART_REPO_ID: ""
+    DOMAIN: ""
+    REPO_NAME: ""
+    PROJECT_KEY: ""
+    ORGANIZATION: ""
+    CODEBUILD_RESOLVED_SOURCE_VERSION: ""
+    QG_TIMEOUT: "300"
+    RP_ENDPOINT: ""
+    RP_PROJECT: ""
+    RP_LAUNCH_NAME: "<MY-APP> SONAR TEST"
+    RP_LAUNCH_DOC: "SONAR Test <MY-APP> Application"
+
+phases:
+  install:
+    runtime-versions:
+      java: corretto11
+    commands:
+      - curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add -
+      - apt-get update
+      - apt-get install -y jq
+      - wget https://downloads.apache.org/maven/maven-3/3.8.6/binaries/apache-maven-3.8.6-bin.tar.gz
+      - tar xzf ./*.gz
+      - ln -s apache-maven-3.8.6 maven
+      - wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.7.0.2747-linux.zip
+      - unzip ./*.zip
+      - export PATH=$PATH:/sonar-scanner-4.7.0.2747-linux/bin/
+      - pip install  reportportal-client==5.2.5
+
+  pre_build:
+    commands:
+#   You can add your unit tests here
+#      #Uncomment to add unit testing
+#      - go get -t ./...
+#      # Vet examines Go source code and reports suspicious constructs
+#      - go vet ./...
+#      # Run unit tests
+#      - go test ./...
+
+  build:
+    commands:
+#      - cd "${APP_DIR}"
+      - ls -la
+#      - export CODEARTIFACT_AUTH_TOKEN=$(aws codeartifact get-authorization-token --domain $DOMAIN --domain-owner $AWS_ACCOUNT_ID --query authorizationToken --output text)
+#      - mvn -s ./.m2/settings.xml clean package deploy -DrepositoryId=$ART_REPO_ID
+#      - |
+#          mvn -s ./.m2/settings.xml sonar:sonar \
+      - |
+         mvn verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar
+           -X
+           -Dsonar.qualitygate.wait="true"
+           -Dsonar.qualitygate.timeout=${QG_TIMEOUT}
+           -Dsonar.pullrequest.provider=${PR_PROVIDER}
+           -Dsonar.scm.revision=${CODEBUILD_RESOLVED_SOURCE_VERSION}
+           -Dsonar.organization=${ORGANIZATION}
+           -Dsonar.projectKey="${PROJECT_KEY}"
+           -Dsonar.login=${LOGIN}
+           -Dsonar.host.url=${SONAR_URL}  #> /dev/null
+      - |
+         if [ "${SONAR_URL}" == "https://sonar.epam.com" ]
+         then
+         SONAR_URL=${SONAR_URL}/sonarqube
+         else
+         SONAR_URL=${SONAR_URL}
+         fi
+
+    ## Get value for quality gates.
+      - API_URL="${SONAR_URL}/api/qualitygates/project_status?projectKey=${PROJECT_KEY}"
+      - curl -s -u "${LOGIN}:" ${API_URL} > result.json
+      - cat result.json | json_pp
+      - python ./scripts/sonar_report.py
+
+artifacts:
+  files:
+    - '**/*'

@@ -1,0 +1,5 @@
+certificate_arn: "<my-certification-arn>"
+replicas: 1
+region_name: "<my-region>"
+repo_name: "<my-repo-name>>"
+route53_zone_name: "<my-domain-name>"

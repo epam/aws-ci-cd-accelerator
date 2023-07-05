@@ -1,0 +1,9 @@
+repos:
+  - id: /.*/
+    allow_custom_workflows: true
+    allowed_overrides:
+      - apply_requirements
+      - workflow
+    # apply_requirements:
+    #   - approved
+    # workflow: terragrunt

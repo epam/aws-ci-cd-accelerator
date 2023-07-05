@@ -1,0 +1,141 @@
+version: 3
+automerge: true
+projects:
+
+- dir: terragrunt_way/applications/py_application
+  workflow: terragrunt
+  autoplan:
+    when_modified: [ "../../../modules/**/*.tf", "../../common_vars.yml", "application_vars.yml", "terragrunt.hcl" ]
+    enabled: false
+
+- dir: terragrunt_way/applications/go_application
+  workflow: terragrunt
+  autoplan:
+    when_modified: [ "../../../modules/**/*.tf", "../../common_vars.yml", "application_vars.yml", "terragrunt.hcl" ]
+    enabled: false
+
+- dir: terragrunt_way/applications/java_application
+  workflow: terragrunt
+  autoplan:
+    when_modified: [ "../../../modules/**/*.tf", "../../common_vars.yml", "application_vars.yml", "terragrunt.hcl" ]
+    enabled: false
+
+# https://www.runatlantis.io/docs/server-side-repo-config.html#allow-repos-to-define-their-own-workflows
+workflows:
+  terragrunt: #================= Terragrunt Workflow =============================#
+    plan:
+      steps:
+        - env:
+            name: BASE_BRANCH_NAME
+            value: main
+        - env:
+            name: DESTROY_PARAMETER
+            command: if [ "$COMMENT_ARGS" = "\-\d\e\s\t\r\o\y" ]; then echo "-destroy"; else echo ""; fi
+        - env:
+            name: TF_VAR_auth_token
+            command: 'aws ssm get-parameter --name "/vcs/user/token" --with-decryption | jq .Parameter.Value -r'
+        - env:
+            name: TF_VAR_sonarcloud_token
+            command: 'aws ssm get-parameter --name "/sonar/token" --with-decryption | jq .Parameter.Value -r'
+        - env:
+            name: TF_VAR_teams_web_hook
+            command: 'aws ssm get-parameter --name "/teams/web/hook" --with-decryption | jq .Parameter.Value -r'
+        - env:
+            name: TF_VAR_slack_web_hook
+            command: 'aws ssm get-parameter --name "/slack/web/hook" --with-decryption | jq .Parameter.Value -r'
+        - env:
+            name: INFRACOST_API_KEY
+            command: 'aws ssm get-parameter --name "/infracost/api/key" --with-decryption | jq .Parameter.Value -r'
+
+        - env:
+            name: INFRACOST
+            value: 1
+        - env: # If you want to use tflint, set the value to 1, otherwise 0.
+            name: TFLINT
+            value: 0
+        - env: # If you want to use tfsec, set the value to 1, otherwise 0.
+            name: TFSEC
+            value: 0
+        - env: # If you want to use checkov, set the value to 1, otherwise 0.
+            name: CHECKOV
+            value: 0
+        - env: # If you want to use regula, set the value to 1, otherwise 0.
+            name: REGULA
+            value: 1
+
+        - run: atlantis version || true
+        - run: terraform version || true
+        - run: infracost --version
+        - run: terragrunt validate
+        - run: terragrunt plan -out $PLANFILE $DESTROY_PARAMETER
+        - run: terragrunt show -json $PLANFILE > $SHOWFILE
+        - run: if [ $TFLINT == 1 ];
+            then
+            echo "------ tflint report ------" && tflint --module; echo "-------------------------------------";
+            fi
+
+        - run: if [ $CHECKOV == 1 ];
+            then
+            echo "------ Checkov Report ------" && checkov -d . --quiet; echo "-------------------------------------";
+            fi
+
+        - run: if [ $TFSEC == 1 ];
+            then
+            echo "------ TFSec Report ------" && tfsec --no-colour --soft-fail --concise-output --exclude AWS005 . ; echo "-------------------------------------";
+            fi
+        - run: if [ $REGULA == 1 ];
+            then
+            echo "------ Regula Report ------" &&  regula run  -t tf-plan $SHOWFILE ; echo "-------------------------------------";
+            fi
+        - run: if [ $INFRACOST == 1 ];
+            then
+            echo "------ Infracost Report ------" && infracost breakdown --path $SHOWFILE ; echo "-------------------------------------";
+            fi
+
+    apply:
+      steps:
+        - env:
+            name: TF_VAR_auth_token
+            command: 'aws ssm get-parameter --name "/vcs/user/token" --with-decryption | jq .Parameter.Value -r'
+        - env:
+            name: TF_VAR_sonarcloud_token
+            command: 'aws ssm get-parameter --name "/sonar/token" --with-decryption | jq .Parameter.Value -r'
+        - env:
+            name: TF_VAR_teams_web_hook
+            command: 'aws ssm get-parameter --name "/teams/web/hook" --with-decryption | jq .Parameter.Value -r'
+        - env:
+            name: TF_VAR_slack_web_hook
+            command: 'aws ssm get-parameter --name "/slack/web/hook" --with-decryption | jq .Parameter.Value -r'
+
+        - env: # If you want to use cloud custodian, set the value to 1, otherwise 0.
+            name: CUSTODIAN
+            value: 0
+
+        - env: # EPAM Custodian variables; set the value to 1 to use, otherwise 0.
+            name: C7N_EPAM
+            value: 0
+        - env:
+            name: CUSTODIAN_ROLE
+            value: 'aws ssm get-parameter --name "/custodian/role/arn"  | jq .Parameter.Value -r'
+        - env:
+            name: C7N_PASSWORD
+            command: 'aws ssm get-parameter --name "/C7N/PASSWORD" --with-decryption | jq .Parameter.Value -r'
+        - env:
+            name: C7N_API
+            command: 'aws ssm get-parameter --name "/C7N/Api" --with-decryption | jq .Parameter.Value -r'
+        - env:
+            name: C7N_USER
+            command: 'aws ssm get-parameter --name "/C7N/user" --with-decryption | jq .Parameter.Value -r'
+        - env:
+            name: ACCOUNT_NAME
+            value: atlantis
+        - run: terragrunt apply $PLANFILE
+        - run: if [ $CUSTODIAN == 1 ];
+            then
+            echo "------ Cloud Custodian Report ------" && custodian run --output-dir=. /home/atlantis/.atlantis/repos/${BASE_REPO_OWNER}/${BASE_REPO_NAME}/${PULL_NUM}/${WORKSPACE}/custodian.yml && echo "-------------------------------------";
+            fi
+
+        - run: if [ $C7N_EPAM == 1 ];
+            then
+            echo "------ EPAM Custodian Report ------" && timeout 600 /home/atlantis/.atlantis/repos/${BASE_REPO_OWNER}/${BASE_REPO_NAME}/${PULL_NUM}/${WORKSPACE}/custodian.sh && echo "-------------------------------------";
+            fi

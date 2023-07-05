@@ -1,0 +1,67 @@
+#======================= Application Pipeline =================#
+repo_name: "<my-app>" # Used as part of the name in the names of pipeline infrastructure parts.
+repo_default_branch: "main" # Project branch.
+environments: [ "dev", "qa", "uat" ] # Pipeline Environment Names.
+email_addresses: [ "<user@domain.local>" ] # Infrastructure administrator email.
+organization_name: "<my-organization-name>" # Organization name for sonarcloud.
+project_key: "<my-project-key>" # Project Key for Sonarcloud.
+
+#================= DLT Block ==================================#
+admin_name: "user" # Username for DLT test.
+cognito_password_name: "/cognito/password" # Path to the parameter store parameter for the password to the DLT user.
+#==================================== ASG or ECS parameters block =================#
+application_port: "8080" # The port for an application.
+docker_container_port: "8080" # Docker container port for the application.
+cpu: 256 # CPU for container.
+memory: 512 # Memory for container.
+desired_capacity: [ "1", "1", "1" ] # Desired capacity for the autoscale group.
+max_size: [ "2", "2", "2" ] # Max capacity for the autoscale group.
+min_size: [ "0", "0", "0" ] # Min capacity for the autoscale group.
+target_type: "instance" # Destination type for application deployment ("ip", "instance", "eks").
+instance_type: "t2.micro" # Instance type for target.
+health_path: "/" # Path to test application health.
+
+#======================================== Parameters for Sonar =========================#
+sonar_url: "https://sonarcloud.io" # The SonarCloud URL.
+sonarcloud_token_name: "/sonar/token" # The path to SonarCloud token.
+
+connection_provider: "GitHub" # CodestarConnection with specified provider, e.g. Bitbucket, GitHub.
+source_provider: "CodeStarSourceConnection" # "CodeCommit" for GitLab and CodeCommit or "CodeStarSourceConnection" for GitHub and Bitbucket
+
+#======================== Parameters for Artifact Bucket =================================#
+expiration_days: "30" # Amount of days after artifacts of the AWS Code Pipeline will be removed.
+force_destroy: true # Delete bucket when destroy: true or false
+versioning: "Disabled" # Versioning bucket for artifacts enabled: "Enabled" or "Disabled"
+storage_bucket_name: "" # Name of the bucket with pipeline settings.
+artifact_bucket_name: "" # Name for a bucket with pipeline artifacts.
+
+#========================== Parameters for Notifications ===================================#
+build_success: "false" # If true, you will also get notifications about successful builds
+display_name: "SNS-Email" # Name that is displayed as a sender when you receive notifications on your email address.
+
+#========================== Report Portal ===================================#
+rp_token_name: "/report/portal/token" # Path to the token in Parameter Store for Report Portal.
+rp_project: "<my_personal_project>" # Project name.
+rp_endpoint: "https://reportportal.epam.com" # Report Portal URI.
+region_name: "ireland" # The name of the region for naming in Report Portal reports.
+
+#======================================= EKS ========================================##
+# These variables depends on Helm Chart                                              ##
+# This is an example with test Helm Chart                                            ##
+#====================================================================================##
+cluster_name: "" # The name of the Kubernetes cluster.
+eks_role_arn: "" # The role created EKS Cluster administrator to manage Helm Chart
+cluster_public_subnet_ids: [] # ID for cluster public network.
+cluster_acm_certificate_arn: "" # ARN certificate.
+cluster_security_groups: [] # Security group for the cluster.
+cluster_region: "" # Region for the cluster.
+#================================= Stand Alone Cluster ==================================#
+cluster_config: "" # The name of the cluster config.
+docker_repo: "" # Docker repo.
+docker_user: "" # Docker user name.
+docker_password: "" # Docker user password.
+
+#================================ Common Variables for any Kubernetes Cluster ============#
+app_fqdn: [] # FQDN for application endpoints
+helm_chart: "" # Helm Chart Store
+helm_chart_version: "" # Helm Chart version

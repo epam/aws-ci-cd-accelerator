@@ -1,0 +1,50 @@
+# Buildspec for creating docker image for accelerator to ECS
+version: 0.2
+env:
+  variables:
+    ART_REPO_ID: ""
+    DOMAIN: ""
+    BUCKET: ""
+    IMAGE_REPO_NAME: ""
+    AWS_ACCOUNT_ID: ""
+    AWS_DEFAULT_REGION: ""
+phases:
+  install:
+    commands:
+      - nohup /usr/local/bin/dockerd --host=unix:///var/run/docker.sock --host=tcp://127.0.0.1:2375 --storage-driver=overlay2&
+      - timeout 15 sh -c "until docker info; do printf .; sleep 1; done"
+  pre_build:
+    commands:
+      - printf Logging in to Amazon ECR...
+      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+      - printf "$BUCKET/$IMAGE_REPO_NAME/"
+      - aws s3 cp --recursive s3://$BUCKET/$IMAGE_REPO_NAME/ .
+  build:
+    commands:
+      - printf Build started on `date`
+      - printf Building the Docker image...
+      - printf $CODEBUILD_BUILD_NUMBER
+      - VERSION=$(printf v1.$CODEBUILD_BUILD_NUMBER)
+      - printf $VERSION
+      - IMAGE_TAG=${VERSION:=latest}
+      - docker build -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:latest . > /dev/null
+      - docker tag $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$IMAGE_TAG > /dev/null
+      - printf '{"ImageURI":"%s"}'  $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$IMAGE_TAG  > imageDetail.json
+  post_build:
+    commands:
+      - printf $IMAGE_TAG
+      - printf $IMAGE_REPO_NAME
+      - printf Build completed on `date`
+      - printf Pushing the Docker image...
+      - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:latest > /dev/null
+      - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$IMAGE_TAG > /dev/null
+artifacts:
+  files:
+    - 'scripts/*'
+    - 'artillery/*'
+    - 'buildspec*'
+    - 'image*.json'
+    - 'appspec_ecs.yml'
+    - 'imageDetail.json'
+    - 'taskdef*.json'
+  discard-paths: no

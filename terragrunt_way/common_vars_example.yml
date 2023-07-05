@@ -1,0 +1,23 @@
+#==================== TF Remote State ===================#
+tf_state_bucket: "" # Bucket for a Terragrunt remote state.
+aws_account_id: "" # AWS account ID.
+region: "" # The AWS region is used to create the remote Terragrunt remote state.
+#========================== VPC =========================#
+azs: [ "a", "b", "c" ] # Availability zone suffix.
+route53_zone_name: "" # Route53 zone name for the project.
+project: "" # Project name prefix.
+vpc_range: "" # VPC range.
+public_subnets: [] # Public subnets range .
+private_subnets: [] # Private subnets range.
+enable_eip: false # Switch for Elastic IP for NAT. Must be "false" when using a reserved Elastic IP.
+eip: "" # Reserved Elastic IP (The parameter is required only when enable_eip = false).
+nat_prefix_list_ids: [] # Prefix list id for NAT (The parameter is required only when enable_eip = false).
+atlantis_prefix_list_ids: [] # Prefix list for Atlantis (The parameter is required only when enable_eip = false).
+allowed_prefix_list_ids: [] # List of prefixes with additional regional CIDR blocks (The parameter is required only when enable_eip = false).
+app_cidr_blocks: [] # CIDR blocks for application (The parameter is required only when enable_eip = true).
+atlantis_cidr_blocks: [] # CIDR blocks for Atlantis (The parameter is required only when enable_eip = true).
+
+#=============================== Atlantis ==============================================#
+atlantis_name: "" # The name for Atlantis.
+ecs_service_assign_public_ip: false # Automatic assignment of the IP address for Atlantis ECS service.
+repo_whitelist: [ "github.com/<my-organization>/<my-repo>" ] # The path to the repository to connect from Atlantis.

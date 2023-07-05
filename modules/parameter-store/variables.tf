@@ -1,0 +1,12 @@
+variable "sonarcloud_token" {}
+variable "teams_web_hook" {}
+variable "slack_web_hook" {}
+variable "infracost_api_key" {}
+variable "cognito_password" {}
+variable "rp_token" {}
+variable "c7n_password" {}
+variable "c7n_api_url" {}
+variable "c7n_user" {}
+variable "dojo_api_key" {}
+#variable "auth_token" {}
+#variable "key_id" {}

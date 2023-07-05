@@ -1,0 +1,11 @@
+# Appspec file for CodeDeploy ecs deployment.
+version: 0.0
+
+Resources:
+  - TargetService:
+      Type: AWS::ECS::Service
+      Properties:
+        TaskDefinition: <TASK_DEFINITION>
+        LoadBalancerInfo:
+          ContainerName: "application"
+          ContainerPort: 8080

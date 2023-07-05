@@ -1,0 +1,14 @@
+parameter_store:
+  - parameter_name: "<my-parameter_1-name>"
+    parameter_value: "<my-parameter_1-value>"
+    tier: "Standard"
+    overwrite: true
+    description: "<my-parameter_1-description>"
+
+  - parameter_name: "<my-parameter_2-name>"
+    parameter_value: "<my-parameter_2-value>"
+    tier: "Standard"
+    overwrite: true
+    description: "<my-parameter_2-description>"
+
+

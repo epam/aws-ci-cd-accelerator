@@ -1,0 +1,29 @@
+# Buildspec file for functional test launch.
+version: 0.2
+env:
+  parameter-store:
+    RP_UUID: "$RP_TOKEN_NAME"
+  variables:
+    SELENIUM_SERVER_URL: http://127.0.0.1:4444/wd/hub
+    PASS_RATE: 100
+    APP_TARGET_URL: ""
+
+phases:
+  pre_build:
+    commands:
+      - docker run -d -p 4444:4444 -v /dev/shm:/dev/shm --name selenium selenium/standalone-firefox:3.141.59  > /dev/null
+      - pip install --upgrade pip  -q
+      - pip install selenium unittest-xml-reporting junitparser -q
+      - pip install pytest pytest-reportportal reportportal-client==5.3.5 -q
+  build:
+    commands:
+      - |
+        python -m pytest --junitxml=report.xml scripts/selenium_tests/tests.py --reportportal
+        python scripts/selenium_tests/selenium_report.py \
+          --report ./report.xml \
+          --pass-rate "${PASS_RATE}"
+reports:
+  Selenium:
+    file-format: JunitXml
+    files:
+      - ./report.xml

@@ -1,0 +1,11 @@
+variable "project" {}
+variable "region" {}
+variable "aws_account_id" {}
+variable "repo_name" {}
+variable "versioning" {}
+variable "force_destroy" {}
+variable "target_type" {}
+variable "region_name" {}
+variable "storage_bucket_name" {}
+variable "artifact_bucket_name" {}
+variable "expiration_days" {}

@@ -1,0 +1,65 @@
+# Buildspec file for pull request analysis  launch.
+version: 0.2
+env:
+  parameter-store:        # it's better to use secrets manager here
+    LOGIN: "$SONAR_TOKEN"
+  variables:
+    ART_REPO_ID: ""
+    DOMAIN: ""
+    REPO_NAME: ""
+    PROJECT: ""
+    ORGANIZATION: ""
+    CODEBUILD_RESOLVED_SOURCE_VERSION: ""
+    QG_TIMEOUT: "300"
+    PR_PROVIDER: "GitHub"
+
+phases:
+  install:
+    runtime-versions:
+      java: corretto11
+    commands:
+      - APP_DIR="/opt/${REPO_NAME}"
+      - mkdir -p "${APP_DIR}"
+      - ln -s "${CODEBUILD_SRC_DIR}" "${APP_DIR}"
+      - curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add -
+      - apt-get update > /dev/null
+      - apt-get install -y jq > /dev/null
+      - cd /tmp
+      - wget -q https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.4.0.2170-linux.zip && printf "Download completed."
+      - printf "Unziping downloaded file..."
+      - unzip sonar-scanner-cli-4.4.0.2170-linux.zip > /dev/null && printf "Unzip completed."
+      - rm sonar-scanner-cli-4.4.0.2170-linux.zip
+      - export PATH=$PATH:/tmp/sonar-scanner-4.4.0.2170-linux/bin
+
+  pre_build:
+    commands:
+#   You can add your unit tests here
+#      #Uncomment to add unit testing
+#      - go get -t ./...
+#      # Vet examines Go source code and reports suspicious constructs
+#      - go vet ./...
+#      # Run unit tests
+#      - go test ./...
+
+  build:
+    commands:
+      - cd "${APP_DIR}"
+      - export PULL_NUM=$(printf $CODEBUILD_WEBHOOK_TRIGGER | awk 'BEGIN{FS="/"} {print $2}')
+      - export BASE_REF=$(printf $CODEBUILD_WEBHOOK_BASE_REF | awk 'BEGIN{FS="/"} {print $3}')
+      - |
+          sonar-scanner \
+          -Dsonar.qualitygate.wait="true" \
+          -Dsonar.qualitygate.timeout=${QG_TIMEOUT} \
+          -Dsonar.pullrequest.provider=${PR_PROVIDER} \
+          -Dsonar.scm.revision=${CODEBUILD_RESOLVED_SOURCE_VERSION} \
+          -Dsonar.organization=${ORGANIZATION} \
+          -Dsonar.projectKey="${PROJECT}-${REPO_NAME}" \
+          -Dsonar.login=${LOGIN} \
+          -Dsonar.host.url="https://sonarcloud.io" \
+          -Dsonar.pullrequest.base=${BASE_REF} \
+          -Dsonar.pullrequest.branch=${CODEBUILD_WEBHOOK_HEAD_REF} \
+          -Dsonar.pullrequest.key=${PULL_NUM} \
+          -Dsonar.pullrequest.github.repository=${ORGANIZATION}/${REPO_NAME}  > /dev/null
+      - API_URL="https://sonarcloud.io/api/qualitygates/project_status?projectKey=${PROJECT}-${REPO_NAME}"
+      - curl -s -u "${LOGIN}:" ${API_URL} > result.json
+      - cat result.json | json_pp

@@ -1,0 +1,45 @@
+{
+  "testId": "",
+  "testName": "DLT-test",
+  "testDescription": "Simple DLT test",
+  "testTaskConfigs": [
+    {
+      "concurrency": "1",
+      "taskCount": "1",
+      "region": "aws-region"
+    }
+  ],
+  "testScenario": {
+    "execution": [
+      {
+        "ramp-up": "1m",
+        "hold-for": "3m",
+        "scenario": "DLT-test"
+      }
+    ],
+    "scenarios": {
+      "DLT-test": {
+        "requests": [
+          {
+            "url": "https://",
+            "method": "GET",
+            "body": {},
+            "headers": {}
+          }
+        ]
+      }
+    }
+  },
+  "showLive": false,
+  "testType": "simple",
+  "fileType": "",
+  "regionalTaskDetails": {
+    "task-region": {
+      "vCPULimit": 500,
+      "vCPUsPerTask": 2,
+      "vCPUsInUse": 1,
+      "dltTaskLimit": 32,
+      "dltAvailableTasks": 32
+    }
+  }
+}

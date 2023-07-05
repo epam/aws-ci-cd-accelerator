@@ -1,0 +1,25 @@
+policies:
+  - name: ec2-instances-without-tags
+    resource: aws.ec2
+    filters:
+      - "tag:Custodian": absent
+  - name: asg-invalid-configuration
+    resource: asg
+    filters:
+      - invalid
+#  - name: s3-key-encryption
+#    resource: s3
+#    actions:
+#      - type: encrypt-keys
+#        crypto: aws:kms
+  - name: vpc-flow-log-check
+    resource: vpc
+    filters:
+      - not:
+          - type: flow-logs
+            enabled: true
+            set-op: or
+            op: equal
+            traffic-type: all
+            log-group: myVPCFlowLogs
+            status: active

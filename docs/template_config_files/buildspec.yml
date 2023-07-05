@@ -1,0 +1,32 @@
+version: 0.2
+env:
+  shell: bash
+  variables:
+    REPO_NAME: ""
+    PROJECT: ""
+    ART_REPO_ID: ""
+    DOMAIN: ""
+    BUCKET: ""
+phases:
+
+  install:
+    runtime-versions:
+      python: 3.10
+    commands:
+      - apt-get update -q
+      - apt-get -y install awscli -q
+
+  pre_build:
+    commands:
+     - chmod +x run.sh
+  build:
+    commands:
+      - VERSION=$(printf 1.$CODEBUILD_BUILD_NUMBER)
+      - aws s3 cp s3://"${BUCKET}"/pack_to_deb.sh ./
+      - bash pack_to_deb.sh <Installation file> $VERSION <Lanuage>
+artifacts:
+  files:
+    - 'scripts/*/**'
+    - '*.yml'
+    - 'target/*.deb'
+  discard-paths: no

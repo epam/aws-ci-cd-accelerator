@@ -1,0 +1,136 @@
+### Configuration file for the GitLab CI/CD pipeline.
+### The file is only intended to work with the GitLab repository for the application.
+
+stages:
+  - sonar_MR
+  - mirror
+  
+
+variables:
+## Check if all variables are set as pipeline variables in GitLab (Settings>CI/CD>Variables).
+  APP_LANGUAGE: ""
+  SONAR_LOGIN: ""
+  SONAR_HOST_URL: ""
+  SONAR_PROJECT_KEY: ""
+  SONAR_PROJECT_NAME: ""
+  SONAR_ORGANIZATION_NAME: ""
+  SONAR_QG_TIMEOUT: ""
+  MAVEN_APP_IMG: "maven:3.8.6-jdk-11"
+  OTHER_APP_IMG: "sonarsource/sonar-scanner-cli:4.7"
+  MIRROR_IMG: "ubuntu:22.04"
+
+## You need a technical user on AWS with an SSH key for AWS CodeCommit.
+## More details at the link (https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_ssh-keys.html).
+  CODECOMMIT_USER_NAME: ""
+  CODECOMMIT_SSH_KEY: ""
+  CODECOMMIT_REPO_URL: ""
+  VAR_COMMAND: ""
+
+.sonar_MR:
+  stage: sonar_MR
+  image: ${IMG}
+  allow_failure: true
+  variables:
+    SONAR_USER_HOME: "${CI_PROJECT_DIR}/.sonar"  # Defines the location of the analysis task cache
+    GIT_DEPTH: "0"  # Tells git to fetch all the branches of the project, required by the analysis task
+  cache:
+    key: "${CI_JOB_NAME}"
+    paths:
+     - .sonar/cache
+
+  script:
+## Initializing variable parameter values for running merge requests.
+     - COMMAND_ARGS="""-Dsonar.qualitygate.wait='true'
+                       -Dsonar.qualitygate.timeout=${SONAR_QG_TIMEOUT}
+                       -Dsonar.projectKey=${SONAR_PROJECT_KEY}
+                       -Dsonar.projectName=${SONAR_PROJECT_NAME}
+                       -Dsonar.login=${SONAR_LOGIN}
+                       -Dsonar.host.url=${SONAR_HOST_URL}
+                       -Dsonar.organization=${SONAR_ORGANIZATION_NAME}
+                       -Dsonar.pullrequest.base=${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}
+                       -Dsonar.pullrequest.branch=${CI_MERGE_REQUEST_SOURCE_BRANCH_NAME}
+                       -Dsonar.pullrequest.key=${CI_MERGE_REQUEST_IID}"""
+     - echo ${COMMAND_ARGS}
+
+## URL correction for EPAM GitLab.
+     - |
+         if [ "${SONAR_HOST_URL}" == "https://sonar.epam.com" ]
+         then
+         SONAR_URL=${SONAR_HOST_URL}/sonarqube
+         else
+         SONAR_URL=${SONAR_HOST_URL}
+         fi
+
+## Running Merge Request Analyzes.
+     - |
+        if [ "${APP_LANGUAGE}" == "java" ]
+        then
+        apt update -y && apt install -y jq && mvn verify sonar:sonar -Dcheckstyle.skip=true $COMMAND_ARGS #2> /dev/null
+        else
+        apk update && apk add jq && sonar-scanner $COMMAND_ARGS #2> /dev/null
+        fi
+
+## Get value for quality gates.
+     - API_URL="${SONAR_URL}/api/qualitygates/project_status?projectKey=${SONAR_PROJECT_KEY}"
+     - curl -s -u "${SONAR_LOGIN}:" ${API_URL} > result.json
+     - cat result.json | jq
+
+sonar_MR:maven_app:
+  variables:
+     IMG: ${MAVEN_APP_IMG}
+  extends:
+     .sonar_MR
+  rules:
+   - if: "$APP_LANGUAGE == 'java' && $CI_PIPELINE_SOURCE == 'merge_request_event'"
+
+sonar_MR:other_app:
+  variables:
+   IMG: ${OTHER_APP_IMG}
+  extends:
+    .sonar_MR
+  rules:
+   - if: "$APP_LANGUAGE != 'java' && $CI_PIPELINE_SOURCE == 'merge_request_event'"
+
+mirror:
+  stage: mirror
+  image: $MIRROR_IMG
+  rules:
+   - if: ($CI_COMMIT_REF_NAME == "main" || $CI_COMMIT_REF_NAME == "master" || $CI_COMMIT_REF_NAME == "develop") && $CI_PIPELINE_SOURCE != 'merge_request_event'
+  allow_failure: true
+  before_script:
+## Install ssh-agent if not already installed.
+   - 'command -v ssh-agent >/dev/null || ( apt-get update -y >/dev/null && apt-get install openssh-client git -y >/dev/null )'
+
+## Run ssh-agent (inside the build environment).
+   - eval $(ssh-agent -s)
+
+## Add the SSH key stored in SSH_PRIVATE_KEY variable to the agent store.
+   - cat $CODECOMMIT_SSH_KEY | tr -d '\r' | ssh-add -
+
+## Create the SSH directory and give it the right permissions.
+   - mkdir -p ~/.ssh && chmod 700 ~/.ssh
+
+## Add connection information to the configuration file
+   - CODECOMMIT_HOST=$(echo ${CODECOMMIT_REPO_URL} | awk -F'[/:]' '{print $4}')
+   - echo "Host ${CODECOMMIT_HOST}" >> ~/.ssh/config
+   - echo "User ${CODECOMMIT_USER_NAME}" >> ~/.ssh/config
+   - chmod 600 ~/.ssh/config
+
+## Use ssh-keyscan to scan the keys of your private server.
+   - ssh-keyscan ${CODECOMMIT_HOST} >> ~/.ssh/known_hosts && chmod 644 ~/.ssh/known_hosts
+
+  script:
+## Add current remote repository.
+  - echo "Adding CodeCommit remote (${CODECOMMIT_REPO_URL})"
+  - git remote add codecommit ${CODECOMMIT_REPO_URL}
+  - echo "DEBUG_8 ${CI_COMMIT_BRANCH}"
+## Push with the force flag to the appropriate remote branch in CodeCommit.
+  - |
+      if [ "${CI_COMMIT_BRANCH}" != "" ]
+      then
+      COMMIT_BRANCH=${CI_COMMIT_BRANCH}
+      else
+      COMMIT_BRANCH=${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}
+      fi
+  - echo "Force pushing '${CI_COMMIT_SHA}' commit to CodeCommit '${COMMIT_BRANCH}' branch"
+  - git push --force codecommit HEAD:refs/heads/${COMMIT_BRANCH}
