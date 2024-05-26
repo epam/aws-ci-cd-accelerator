@@ -1,7 +1,9 @@
 output "aws_acm_certificate_arn" {
-  value = aws_acm_certificate.acm.arn
+  description = "The ARN of the AWS Certificate Manager (ACM) Certificate"
+  value       = aws_acm_certificate.acm.arn
 }
 
 output "aws_acm_certificate_id" {
-  value = aws_acm_certificate.acm.id
+  description = "The ID of the AWS Certificate Manager (ACM) Certificate"
+  value       = aws_acm_certificate.acm.id
 }

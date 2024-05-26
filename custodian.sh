@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-creds=$(aws sts assume-role --role-arn "$CUSTODIAN_ROLE" --role-session-name "RoleSession1" --duration-seconds 900)
+creds=$(aws sts assume-role --role-arn "$CUSTODIAN_ROLE" --role-session-name "Custodian" --duration-seconds 900)
 
 sleep 2
 AWS_ACCESS_KEY_ID=$(echo "$creds" | jq -r .Credentials.AccessKeyId)

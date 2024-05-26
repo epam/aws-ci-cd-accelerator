@@ -1,0 +1,35 @@
+{
+  "containerDefinitions": [
+    {
+      "name": "${CONTAINER_NAME}",
+      "image": "<IMAGE1_NAME>",
+      "essential": true,
+      "environment": "${ENV_VARS}",
+      "secrets": "${SECRETS}",
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "${LOGS_GROUP}",
+          "awslogs-region": "${REGION}",
+          "awslogs-stream-prefix": "${ENV}"
+        }
+      },
+      "portMappings": [
+        {
+          "hostPort": "${TARGET_PORT}",
+          "protocol": "tcp",
+          "containerPort": "${TARGET_PORT}"
+        }
+      ]
+    }
+  ],
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "networkMode": "awsvpc",
+  "cpu": "${CPU}",
+  "memory": "${MEMORY}",
+  "family": "${FAMILY}",
+  "executionRoleArn": "${EXECUTION_ROLE_ARN}",
+  "taskRoleArn": "${TASK_ROLE_ARN}"
+}

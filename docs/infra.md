@@ -3,88 +3,159 @@
 ![Infrastructure diagram](../docs/pic/infra.png)
 
 ### There are two steps of infrastructure deployment:
-* [Manual](./infra.md#manual)
-* [Semi-automatic](./infra.md#semi-automatic)
-## Manual 
-#### Managed by the user using CLI tools (`AWS CLI`, `Docker`, `Terraform`, and `Terragrunt` need to be installed)
-#### This step deploys terraform modules:
-- `vpc`,
-- `atlantis`, 
-- `parameter-store`,
-- `vcs_integration`
+* [Manual](./infra.md#manual),
+* [Semi-automatic](./infra.md#semi-automatic).
+
+### Manual
+* #### Managed by a user using CLI tools (`AWS CLI`, `Docker`, `Terraform`, and `Terragrunt` need to be installed)
+* #### This step deploys terraform modules:
+  - [vpc](../modules/core/vpc)
+  - [atlantis](../modules/core/atlantis)
+  - [parameter-store](../modules/core/parameter-store) - Parameter Store variables for Atlantis,
+  - [atlantis_vcs_integration](../modules/core/atlantis_vcs_integration)
+  - [distributed_load_testing](../modules/core/distributed_load_testing)
+  - [template_module](../modules/core/template_module)
+  - [ai_handler](../modules/core/ai_handler) - Module for processing Terraform code errors by OpenAI
 
 #### Terragrunt implementation:
-* The root directory when we use `Terragrunt` is [terragrunt_way](../terragrunt_way/).
-* The file [terragrunt_way/terragrunt.hcl](../terragrunt_way/terragrunt.hcl) in the root directory defines *Terraform Backend*. The bucket name for the Backend is specified in `terragrunt_way/common_vars.yml`
-* The Terragrunt configuration is defined in the `terragrunt.hcl` file in each working directory involved in the deployment.
-* Common variables for modules are defined in the [terragrunt_way/common_vars.yml](./variables.md#Common) 
-* Sensitive variables are defined in the `terragrunt_way/parameter_store.yml`, which we have to create from [parameter_store_example.yml](variables.md#sensitive)
-* Also, you can find the description of the variables [here](./variables.md)
-#### *1. Core resources* [terragrunt_way/core](../terragrunt_way/core) should be deployed once: 
-a) Fill in all variables in the `terragrunt_way/common_vars.yml` file.
 
-b) Move [parameter_store_example.yml](../terragrunt_way/parameter_store_example.yml) to the `terragrunt_way/parameter_store.yml` file and fill in all variables you need. **Don't push this file to the repository. This file should include in `.gitignore`!!!**
+- Terragrunt folders structure looks like that:
 
-c) Deploy infrastructure:
-```bash
-infra $ cd terragrunt_way/core
-core $ terragrunt run-all apply
-``` 
-#### *2. Additional step* `GitLab Integration`, if you use GitLab for application hosting:
-a) Because of the lack of communication between GitLab and AWS, you need to create mirroring from GitLab to AWS CodeCommit. We create an AWS CodeCommit repository and use the GitLab CI/CD to mirror the application code from GitLab to AWS CodeCommit. We also use this GitLab CI/CD in our PR analysis process. 
+  **accelerator-infrastructure**
+    - _envcommon
+    - accounts
+      - <"aws_account_id">
+        - regions
+          - <"your_region_1">
+            - core
+            - setup_folder
+            - applications
+              - <"application-1">
+                - ci-cd
+              - <"application-2">
+                - ci-cd
+  - **application-infrastructure**
+    - _envcommon
+    - <"application-1">
+      - accounts
+        - dev(`If stages are deployed at the same account, you can join them`)
+          - regions
+            - <"your_region_1">
+              - cross-account-integration
+              - infrastructure-module
+        - qa
+          - regions
+            - <"your_region_1">
+              - cross-account-integration
+              - infrastructure-module
+        - uat
+          - regions
+            - <"your_region_1">
+              - cross-account-integration
+              - infrastructure-module
 
-b) Since we use AWS CodeCommit as a mirror, we need to use a prepared SonarCloud Project to test the application code. Such as this [example](https://harshanas.medium.com/integrate-sonarcloud-with-aws-codecommit-and-codebuild-186ad80a109).
+* In [**accelerator**](../terragrunt-infrastructure-example/accelerator/accounts/aws_account_id) folder we deploy manually:
+  1. All folders in [core](../terragrunt-infrastructure-example/accelerator/accounts/aws_account_id/regions/example/core) directory.
+  2. Make a customization process to deploy the entire folder structure for application needs (CI/CD and application infrastructure) [setup_folder](../terragrunt-infrastructure-example/accelerator/accounts/aws_account_id/regions/example/setup_folder)
+* Deploy using Atlantis:
+  1. Application infrastructure from [application-infrastructure](../terragrunt-infrastructure-example/application-infrastructure) directory.
+  2. CI/CD for an application from [applications](../terragrunt-infrastructure-example/accelerator/accounts/aws_account_id/regions/example/setup_folder/applications) directory.
+### Deployment steps
+#### 1. First step
+ - To work with VCS, you will need at least one technical auto-user account with administrative privileges and a valid **Token** for it.
+ - To continue, create a new branch from origin/master. Name it, for example, **develop** and checkout this branch.
+ - Copy [terragrunt-infrastructure-example](../terragrunt-infrastructure-example) with the required name and rename all **example** inserts to folder names using **<your_repository_name>** and **region** with **<your_app_region_name>** and **aws_account_id** with **<your_aws_account_id>** according to the Terragrunt folder structure shown above.
+ - In [common.hcl](../terragrunt-infrastructure-example/common.hcl) define all common variables.
+#### 2. Core
+- After this step, we will have next infrastructure: *vpc*, *atlantis*, *atlantis_ai_handler*, *vcs_integration*, *common_bucket*, *common_parameters*, [*dlt*](https://aws.amazon.com/solutions/implementations/distributed-load-testing-on-aws/)
+1. In [account.hcl](../terragrunt-infrastructure-example/accelerator/accounts/aws_account_id/account.hcl) define the `account`variable.
+2. In [region.hcl](../terragrunt-infrastructure-example/accelerator/accounts/aws_account_id/regions/example/region.hcl) define variables.
+3. Copy or rename [parameter_store_example.hcl](../terragrunt-infrastructure-example/parameter_store_example.hcl) to `parameter_store.hcl`. Define all variables. **Don't push this file to the Git Repository**.
+4. Define all necessary variables in [env.hcl](../terragrunt-infrastructure-example/accelerator/accounts/aws_account_id/regions/example/core/env.hcl) according to your needs.
+5. Run `terragrunt run-all plan` and then `terragrunt run-all apply` from the **core** directory.
 
-c) Copy [terragrunt_way/gitlab_integration/example](variables.md#Integration) to `terragrunt_way/gitlab_integration/your_app_name`.
+#### 3. SetUp Folders Structure
+- After this step, we will have all folders and files for deploying CI/CD and application's infrastructure.
+1. Change `example` [setup_folder/applications/example](../terragrunt-infrastructure-example/accelerator/accounts/aws_account_id/regions/example/setup_folder/applications/example) with you application repository name `<my-application-name>`.
+2. Rename `app_parameter_store_example.hcl` to `app_parameter_store.hcl` and fill in all the necessary values for parameters. **Don't push this file to the Git Repository.**
+3. Rename `app_secrets_manager_example.hcl` to `app_secrets_manager.hcl` and fill in all the necessary values for secrets. **Don't push this file to the Git Repository.**
+4. Define all *secret* variables in the file. If your application is stored on `GitLab` define variables for `GitLab Integration`. **Don't add this file to Git**.
+5. Define all variables in `env.hcl`.
+6. Run `terragrunt run-all plan` and `terragrunt run-all apply` from the `setup_folder/applications/<my-application-name>` directory.
+7. If your application is store on GitLab, put [.gitlab-ci.yml](./template_config_files/.gitlab-ci.yml) to the root of your GitLab repository for application. It will start GitLab CI/CD Pipeline to mirror the GitLab repo to AWS CodeCommit.
 
-d) Change the name of `gitlab_example.tfvars` to `gitlab.tfvars`. **Don't push this file to the repository. This file must be included in `.gitignore`**.
+#### 4. Cross-account Integration
+Create cross-account roles to give Atlantis permissions to manage infrastructure in other accounts:
 
-e) Fill in all variables in `gitlab.tfvars`.
+- Run `terragrunt apply` from the `cross-account-integration` directory under [application-infrastructure](../terragrunt-infrastructure-example/application-infrastructure).
+- Put **ARN** of the role to `account.hcl` file with variable `assume_role_arn`. The Atlantis will use the role to apply application infrastructure in different account.
+- **By default, we give admin permissions to the role.**
 
-f) Deploy integration:
-```bash
-infra $ cd terragrunt_way/gitlab_integration/your_app_name
-your_app $ terragrunt apply
-```
-g) Put [.gitlab-ci.yml](../docs/template_config_files/.gitlab-ci.yml) to the root of your GitLab repository for application. It will start GitLab CI/CD Pipeline to mirror the GitLab repo to AWS CodeCommit.
+### Semi-Automatic
+##### 1. Application Infrastructure
 
-
-## Semi-automatic
-
-* You need to specify the branch into which the code will be merged to deploy the infrastructure in the [atlantis.yml](../atlantis.yaml) file. 
-```
-workflows:
-#==================== Terragrunt Workflow ==========================#
-  terragrunt:
-    plan:
-      steps:
-        - env:
-            name: BASE_BRANCH_NAME
-            value: <your_main_branch>
-```
-* After you push it to the repository, Atlantis will execute the specified workflow.
-
-### Application resources:
-
-1. Copy the template folder [example_application](../terragrunt_way/applications/example_application) into the same folder `../terragrunt_way/applications` and rename it.
-2. Add this folder `terragrunt_way/applications/your_app` to [atlantis.yml](../atlantis.yaml)
-```
-- dir: terragrunt_way/applications/your_app
-  workflow: terragrunt
-  autoplan:
-    when_modified: [ "../../../modules/**/*.tf", "../../common_vars.yml", "application_vars.yml", "terragrunt.hcl" ]
-    enabled: true
-```
-3. Define all variables in [application_vars.yml](variables.md#Application) in your application folder.
-4. Push to the repository.
-5. If you have application variables to be placed in the Parameter Store, do the following:
-   * Copy [parameter_store_application](../docs/template_config_files/parameter_store_application) folder to the [parameter_store_apps](../terragrunt_way/core/parameter_store_apps) folder;
-   * Put all variables you need into `../terragrunt_way/core/parameter_store_apps/parameter_store.yml` file;
-   * Make `apply`:
-   ```bash
-   infra $ cd core/parameter_store_apps/<your apps>
-   <your apps> $ terragrunt apply
+1. After `SetUp Folders Structure` step we have directories with folders for application infrastructure for stages.
+2. Recheck all variables in `account.hcl` and `region.hcl`. Complete defining of variables in `env.hcl` file for each stage.
+3. In the [atlantis.yaml](../atlantis.yaml) file, for managing folders you need to deploy, set `enabled: true` or `false` in the template blocks:
+    ``` yaml
+    projects:
+       - &template_ci_cd
+         dir: template_ci_cd
+         workflow: terragrunt
+         autoplan:
+           enabled: true
+           when_modified:
+             - "../../../../../../../../../modules/accelerator/**/*.tf"
+             - "**/*.hcl"
+       - &template_infra
+         dir: template_infra
+         apply_requirements: [approved]
+         workflow: terragrunt
+         autoplan:
+           enabled: true
+           when_modified:
+             - "../../../../../../../modules/application-infrastructure/**/*.tf"
+             - "**/*.hcl"
    ```
+4. Create a block with the path to your [infrastructure-module](../terragrunt-infrastructure-example/application-infrastructure) folder
+
+     ``` yaml
+        - <<: *template_infra
+          dir: terragrunt-infrastructure-<"your_region_1">/application-infrastructure/<"application-1">/dev/regions/<"your_region_1">/infrastructure-module
+     ```
+   Define the Git branches that Atlantis should work with:
+      ``` yaml
+         workflows:
+          terragrunt: #================= Terragrunt Workflow =============================#
+            plan:
+              steps:
+                - env:
+                    name: BASE_BRANCH_NAME
+                    value: master
+                - env:
+                    name: HEAD_BRANCH_NAME
+                    value: develop
+      ```
+5. Push the changes to the repository. Create a pull request with defined branches. Atlantis starts and runs the `terragrunt plan` command.
+6. If the plan output is good, comment `atlantis apply`, and Atlantis will execute the `terragrunt apply` command.
+
+#### 2. Accelerator CI/CD
+1. After `SetUp Folders Structure` step we have a folder for `CI/CD` in the [applications](../terragrunt-infrastructure-example/accelerator/accounts/aws_account_id/regions/example) directory.
+2. Define all variables in `env.hcl` file.
+3. In the [atlantis.yaml](../atlantis.yaml) file, create a block with the path to the `ci-cd` folder:
+
+   ``` yaml
+        - <<: *template_ci_cd
+          dir: terragrunt-infrastructure-<"your_region_1">/accelerator/accounts/aws_account_id/regions/<"your_region_1">/applications/<"application-1">/ci-cd
+   ```
+
+4. Push the changes to the repository. Atlantis will run the `terragrunt plan` command.
+5. If the plan output is good, comment `atlantis apply`, and Atlantis will execute the `terragrunt apply` command.
+
+### Post deployed actions
+
+1. Go to AWS Console Pipeline Section and approve AWS CodeStar Connection
+2. Make changes in your application repository, push to your repository, AWS CodePipeline will start.
 
 
 ### Atlantis flow:
@@ -93,23 +164,26 @@ Currently, the following flow, described in [atlantis.yaml](../atlantis.yaml), i
 1. `Atlantis` **plan** run is triggered automatically by raising pull request into branch you specified and includes the following steps:
     * `terragrunt validate`
     * `terragrunt plan -out $PLANFILE $DESTROY_PARAMETER`
-    * testing Terraform code with `Checkov`, `TFSec` or `Regula`
-    * runs `Infracost` to estimate the cost of the planned infrastructure
+    * testing Terraform code with `Checkov`, `TFSec` or `Regula`: define env value `0` or `1` accordingly
+    * **to process terraform errors from resources configuration with Open AI** set env `AI_HANDLER` to `1`, see [Terraform Issue Handler](../docs/AI/ai_for_IaC.md)
+    * `Infracost` estimates the cost of the planned infrastructure
     * **to destroy infrastructure** is used `$DESTROY_PARAMETER` and command `atlantis plan -d path/to/directory -- -destroy`
 2. If there are no errors in the previous step, the following steps:
     * comment `atlantis apply -d path/to/directory` in PR and `Atlantis` will **apply** changes in PR to the existing infrastructure
-    * testing AWS infrastructure with `Cloud Custodian` with rules described in [custodian.yml](../custodian.yml) or runs [custodian.sh](../custodian.sh) if we use EPAM Custodian
+    * testing AWS infrastructure with `Cloud Custodian` with rules described in [custodian.yml](../custodian.yml) or runs [custodian.sh](../custodian.sh) if we use EPAM Syndicate Rule Engine.
 3. If changes are applied successfully, PR is **merged** to the branch being specified.
 
 **TODO**: Current implementation allows repos to define their own workflows. It means that anyone can create a pull request to the repo and essentially run arbitrary code on the `Atlantis` server. To prevent that:
-* [custom workflow code](../atlantis.yaml) must be moved to the [Atlantis Server Side Repo Config](../modules/atlantis/repos.yaml)
+* [custom workflow code](../atlantis.yaml) must be moved to the [Atlantis Server Side Repo Config](../modules/core/atlantis/repos.yaml)
 * `allow_custom_workflows` must be disabled.
 
 **TODO**: `Cloud Custodian` currently has just one stub rule to demonstrate usage feasibility.
 
 
 ## Further reading
-
-* [CI/CD](../docs/cicd.md)
+* [Linters and Static Code Analysis tools for Terraform, Infracost](./linters.md)
+* [AI Handler](AI/ai_for_IaC.md)
+* [CI/CD](./cicd.md)
 * [Application environments](../docs/app-envs.md)
-* [Supported Linters and Static Code Analysis tools for Terraform](../docs/linters.md)
+
+#### [Main page](../README.md)

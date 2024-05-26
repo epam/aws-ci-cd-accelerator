@@ -1,0 +1,213 @@
+%{ for region in dest_regions ~}
+module "kms_replica_${region}" {
+  providers = {
+    aws = aws.${region}
+  }
+
+  source                  = "terraform-aws-modules/kms/aws"
+  version                 = "1.5.0"
+  deletion_window_in_days = 7
+  description             = "Replica key ${region}"
+  create_replica          = true
+  primary_key_arn         = module.buckets.aws_kms_key_arn
+  enable_default_policy   = true
+
+  key_users         = var.key_users
+  key_service_users = var.key_service_users
+  key_statements    = [
+    {
+      sid     = "CloudWatchLogs"
+      actions = [
+        "kms:Encrypt*",
+        "kms:Decrypt*",
+        "kms:ReEncrypt*",
+        "kms:GenerateDataKey*",
+        "kms:Describe*"
+      ]
+      resources = ["*"]
+
+      principals = [
+        {
+          type        = "Service"
+          identifiers = ["logs.${region}.amazonaws.com"]
+        }
+      ]
+
+      conditions = [
+        {
+          test     = "ArnLike"
+          variable = "kms:EncryptionContext:aws:logs:arn"
+          values   = [
+            "arn:aws:logs:*:*:log-group:*",
+          ]
+        }
+      ]
+    },
+    {
+      sid     = "Roles"
+      actions = [
+        "kms:Encrypt*",
+        "kms:Decrypt*",
+        "kms:ReEncrypt*",
+        "kms:GenerateDataKey*",
+        "kms:Describe*"
+      ]
+      resources = ["*"]
+
+      principals = [
+        {
+          type        = "AWS"
+          identifiers = ["arn:aws:iam::$$${var.aws_account_id}:root"]
+        }
+      ]
+
+      conditions = [
+        {
+          test   = "StringLike"
+          values = [
+            "arn:aws:iam::$$${var.aws_account_id}:role/Codepipeline-$$${var.repo_name}*"
+          ]
+          variable = "aws:PrincipalArn"
+        }
+      ]
+    },
+    {
+      sid     = "DeployRoles"
+      actions = [
+        "kms:Encrypt*",
+        "kms:Decrypt*",
+        "kms:ReEncrypt*",
+        "kms:GenerateDataKey*",
+        "kms:Describe*"
+      ]
+      resources = ["*"]
+
+      principals = [
+        {
+          type        = "AWS"
+          identifiers = [for k in var.account_identifiers : "arn:aws:iam::$$${k}:root"]
+        }
+      ]
+
+      conditions = [
+        {
+          test     = "StringLike"
+          values   = var.kms_identifiers
+          variable = "aws:PrincipalArn"
+        }
+      ]
+    }
+  ]
+
+  # Aliases
+  aliases = ["$$${var.repo_name}-${region}-key"]
+}
+module "s3-bucket-artifact-replica_${region}" {
+  providers = {
+    aws = aws.${region}
+  }
+  source                                = "terraform-aws-modules/s3-bucket/aws"
+  version                               = "3.10.1"
+  bucket                                = "$$${var.artifact_bucket_prefix}-$$${var.repo_name}-${region}"
+  policy                                = data.aws_iam_policy_document.s3_artifact_${region}.json
+  force_destroy                         = var.force_destroy
+  attach_policy                         = true
+  attach_deny_insecure_transport_policy = true
+  server_side_encryption_configuration  = {
+    rule = {
+      apply_server_side_encryption_by_default = {
+        kms_master_key_id = module.kms_replica_${region}.key_arn
+        sse_algorithm     = "aws:kms"
+      }
+    }
+  }
+  versioning = {
+    enabled    = true
+    mfa_delete = false
+  }
+  lifecycle_rule = [
+    {
+      id                            = "artifact"
+      enabled                       = true
+      noncurrent_version_transition = [
+        {
+          days          = 30
+          storage_class = "STANDARD_IA"
+        },
+        {
+          days          = 60
+          storage_class = "ONEZONE_IA"
+        },
+        {
+          days          = 90
+          storage_class = "GLACIER"
+        },
+      ]
+      noncurrent_version_expiration = {
+        days = 300
+      }
+    }
+  ]
+}
+data "aws_iam_policy_document" "s3_artifact_${region}" {
+
+  statement {
+    sid    = "ForAcceleratorRoles"
+    effect = "Allow"
+    principals {
+      identifiers = ["arn:aws:iam::$$${var.aws_account_id}:root"]
+      type        = "AWS"
+    }
+    actions = [
+      "s3:*"
+    ]
+    resources = [
+      "arn:aws:s3:::$$${var.artifact_bucket_prefix}-$$${var.repo_name}-${region}",
+      "arn:aws:s3:::$$${var.artifact_bucket_prefix}-$$${var.repo_name}-${region}/*"
+    ]
+    condition {
+      test   = "StringLike"
+      values = [
+        "arn:aws:iam::$$${var.aws_account_id}:role/Codepipeline-$$${var.repo_name}*",
+        "arn:aws:iam::$$${var.aws_account_id}:role/Codebuild-$$${var.repo_name}*"
+      ]
+      variable = "aws:PrincipalArn"
+    }
+  }
+  statement {
+    sid    = "ForAccountsRoles"
+    effect = "Allow"
+    principals {
+      identifiers = [for k in var.account_identifiers : "arn:aws:iam::$$${k}:root"]
+      type        = "AWS"
+    }
+    actions = [
+      "s3:*"
+    ]
+    resources = [
+      "arn:aws:s3:::$$${var.artifact_bucket_prefix}-$$${var.repo_name}-${region}",
+      "arn:aws:s3:::$$${var.artifact_bucket_prefix}-$$${var.repo_name}-${region}/*"
+    ]
+  }
+  statement {
+    sid    = "ForAccountsRoot"
+    effect = "Allow"
+    principals {
+      identifiers = [for k in var.account_identifiers : "arn:aws:iam::$$${k}:root"]
+      type        = "AWS"
+    }
+    actions = [
+      "s3:*"
+    ]
+    resources = [
+      "arn:aws:s3:::$$${var.artifact_bucket_prefix}-$$${var.repo_name}-${region}",
+      "arn:aws:s3:::$$${var.artifact_bucket_prefix}-$$${var.repo_name}-${region}/*"
+    ]
+    condition {
+      test     = "StringEquals"
+      values   = var.artifact_bucket_identifiers
+      variable = "aws:PrincipalArn"
+    }
+  }
+}
+%{ endfor ~}

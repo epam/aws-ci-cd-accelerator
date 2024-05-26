@@ -12,8 +12,6 @@
            "s3:ListBucket"
           ],
           "Resource": [
-            "${ArtifactBucket}",
-            "${ArtifactBucket}/*",
             "${StorageBucket}",
             "${StorageBucket}/*"
           ],
@@ -22,21 +20,10 @@
 		{
 			"Effect": "Allow",
 			"Action": [
-				"kms:DescribeKey",
-                "kms:GenerateDataKey*",
-                "kms:Encrypt",
-                "kms:ReEncrypt*",
-                "kms:Decrypt"
-			],
-			"Resource": "${AwsKmsKey}"
-		},
-		{
-			"Effect": "Allow",
-			"Action": [
 			    "logs:CreateLogStream",
 			    "logs:PutLogEvents"
 			],
-			"Resource": "arn:aws:logs:${Region}:${Account}:log-group:/aws/codebuild/${RepoName}-*"
+			"Resource": "arn:aws:logs:${REGION}:${ACCOUNT}:log-group:/aws/codebuild/${REPO_NAME}-*"
 		},
         {
             "Effect": "Allow",
@@ -47,27 +34,40 @@
                 "codebuild:BatchPutTestCases",
                 "codebuild:BatchPutCodeCoverages"
             ],
-            "Resource": "*"
-        },
-        {
-            "Effect": "Allow",
-            "Action": [
-                "ssm:DescribeParameters"
-            ],
-            "Resource": "*"
+            "Resource": [
+                "arn:aws:codebuild:${REGION}:${ACCOUNT}:project/${REPO_NAME}-*",
+                "arn:aws:codebuild:${REGION}:${ACCOUNT}:report-group/${REPO_NAME}-*"
+            ]
         },
 		{
 			"Effect": "Allow",
-			"Action": ["ssm:GetParameters","ssm:GetParameter","ssm:GetParametersByPath"],
-			"Resource": "arn:aws:ssm:${Region}:${Account}:parameter/*"
+			"Action": [
+                "ssm:GetParameters",
+                "ssm:GetParameter"
+			],
+			"Resource": "arn:aws:ssm:${REGION}:${ACCOUNT}:*"
 		},
+		{
+            "Effect" : "Allow",
+            "Action" : [
+                "secretsmanager:GetSecretValue"
+            ],
+            "Resource" : "arn:aws:secretsmanager:${REGION}:${ACCOUNT}:secret:*"
+        },
+        {
+            "Effect" : "Allow",
+            "Action" : [
+                "kms:Decrypt"
+            ],
+            "Resource" : "arn:aws:kms:${REGION}:${ACCOUNT}:key/*"
+        },
 		{
             "Sid":"GetAuthorizationToken",
             "Effect":"Allow",
             "Action":[
                 "ecr:GetAuthorizationToken"
             ],
-            "Resource":"*"
+            "Resource": "*"
         },
         {
             "Effect": "Allow",
@@ -81,13 +81,13 @@
                 "ecr:BatchGetImage",
                 "ecr:PutImage"
             ],
-            "Resource": "arn:aws:ecr:${Region}:${Account}:repository/${ECR}"
+            "Resource": "arn:aws:ecr:${REGION}:${ACCOUNT}:repository/${REPO_NAME}"
         },
         {
             "Action": [
                 "codecommit:GitPull"
             ],
-            "Resource": "arn:aws:codecommit:${Region}:${Account}:${RepoName}",
+            "Resource": "arn:aws:codecommit:${REGION}:${ACCOUNT}:${REPO_NAME}",
             "Effect": "Allow"
         },
         {
@@ -95,7 +95,10 @@
             "Action": [
                 "codestar-connections:UseConnection"
             ],
-            "Resource": "*"
+            "Resource": [
+                "arn:aws:codestar-connections:${REGION}:${ACCOUNT}:connection/*",
+                "arn:aws:codeconnections:${REGION}:${ACCOUNT}:connection/*"
+            ]
         },
         {
             "Effect": "Allow",
@@ -110,7 +113,7 @@
             "codeartifact:ReadFromRepository",
             "codeartifact:GetRepositoryEndpoint"
             ],
-            "Resource": "*"
+            "Resource": "arn:aws:codeartifact:${REGION}:${ACCOUNT}:repository/${PROJECT}/${REPO_NAME}"
         },
         {
             "Effect": "Allow",

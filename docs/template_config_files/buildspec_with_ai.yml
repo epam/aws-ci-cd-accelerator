@@ -1,0 +1,16 @@
+version: 0.2
+env:
+  variables:
+    LLM_MODEL: ""
+  parameter-store:
+    OPENAI_API_KEY: /accelerator/openai_token
+    GITHUB_TOKEN: "/${REPO_NAME}/user/token"
+phases:
+  install:
+    commands:
+      - git checkout ${SOURCE_BRANCH}
+      - pip install -r scripts/requirements.txt -qq
+
+  build:
+    commands:
+      - python ${CODEBUILD_SRC_DIR}/scripts/ai/ai_cicd_analyzer.py

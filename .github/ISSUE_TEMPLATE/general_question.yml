@@ -1,0 +1,17 @@
+name: General Question
+description: Create a report to help us improve
+title: "[Question]: "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this general report!
+
+  - type: textarea
+    id: what-a-question
+    attributes:
+      label: Description. What is your question?
+      description: Describe your question as detail as possible.
+      placeholder: Tell us what your question is!
+      value: "My question is ..."

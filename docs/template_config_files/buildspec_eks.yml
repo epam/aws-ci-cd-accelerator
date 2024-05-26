@@ -1,66 +1,47 @@
 ---
 version: 0.2
+batch:
+  build-list:
+    - identifier: build1
+      env:
+        parameter-store:
+          KUBE_CONFIG: "$KUBECONFIG_NAME"
+          DOCKER_PASSWORD: "$DOCKER_PASSWORD_PS"
+          DOCKER_USER: "$DOCKER_USER_PS"
+          DOCKER_REPO: "$DOCKER_REPO_PS"
+      ignore-failure: true
+    - identifier: build2
+      env:
+        variables:
+          HELM_CHART: ""
+          HELM_CHART_VERSION: ""
+          REPO_NAME: ""
+          IMAGE_REPO_NAME: ""
+          AWS_ACCOUNT_ID: ""
+          AWS_CLUSTER_REGION: ""
+          EKS_ROLE_ARN: ""
+          CLUSTER_NAME: ""
+          ENVIRONMENT: ""
+          REPLICAS: ""
+          APP_FQDN: ""
 env:
   variables:
-    REPO_NAME: ""
-    REGION_NAME: ""
-    IMAGE_REPO_NAME: ""
-    AWS_ACCOUNT_ID: ""
-    AWS_CLUSTER_REGION: ""
-    EKS_ROLE_ARN: ""
-    CLUSTER_NAME: ""
-    ENVIRONMENT: ""
-    REPLICAS: ""
-    TARGET_PORT: ""
-    CERTIFICATE_ARN: ""
-    SECURITY_GROUPS: ""
-    SUBNETS: ""
-    ROUTE53_ZONE_NAME: ""
-    HEALTH_PATH: ""
+    HELM_CHART: ""
+    HELM_CHART_VERSION: ""
+
 phases:
   install:
     commands:
-      - env
-      - curl -o aws-iam-authenticator https://s3.us-west-2.amazonaws.com/amazon-eks/1.21.2/2021-07-05/bin/linux/amd64/aws-iam-authenticator > /dev/null
-      - curl -o kubectl https://s3.us-west-2.amazonaws.com/amazon-eks/1.23.7/2022-06-29/bin/linux/amd64/kubectl> /dev/null
-      - chmod +x ./kubectl ./aws-iam-authenticator
+      - apt-get update
+#      - env
       - curl -sSL https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 | bash
       - helm version --short
-      - export PATH=$PWD/:$PATH
-      - apt-get update && apt-get -y install jq python3-pip python3-dev gettext-base && pip3 install --upgrade awscli
-  pre_build:
-    commands:
-      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
-      - export KUBECONFIG=$HOME/.kube/config
-      - CREDENTIALS=$(aws sts assume-role --role-arn $EKS_ROLE_ARN --role-session-name codebuild-kubectl --duration-seconds 900)
-      - export AWS_ACCESS_KEY_ID="$(echo ${CREDENTIALS} | jq -r '.Credentials.AccessKeyId')"
-      - export AWS_SECRET_ACCESS_KEY="$(echo ${CREDENTIALS} | jq -r '.Credentials.SecretAccessKey')"
-      - export AWS_SESSION_TOKEN="$(echo ${CREDENTIALS} | jq -r '.Credentials.SessionToken')"
-      - export AWS_EXPIRATION=$(echo ${CREDENTIALS} | jq -r '.Credentials.Expiration')
-      - aws eks update-kubeconfig --name $CLUSTER_NAME --region $AWS_CLUSTER_REGION
-      - export IMAGE="$(cat imageDetail.json | jq  -r '.ImageURI')"
-      - VERSION=$(printf "$ENVIRONMENT.$CODEBUILD_BUILD_NUMBER")
-      - docker pull $IMAGE
-      - export ENVIRONMENT_IMAGE="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$IMAGE_REPO_NAME:$VERSION"
-      - docker tag $IMAGE $ENVIRONMENT_IMAGE
-      - docker push $ENVIRONMENT_IMAGE
+      - helm plugin install https://github.com/hypnoglow/helm-s3.git
+      - apt-get -y install jq python3-pip python3-dev gettext-base && pip3 install --upgrade awscli
+      - curl -s -O https://s3.us-west-2.amazonaws.com/amazon-eks/1.28.3/2023-11-14/bin/linux/amd64/kubectl
+      - curl -s -O https://s3.us-west-2.amazonaws.com/amazon-eks/1.28.3/2023-11-14/bin/linux/amd64/kubectl.sha256
+      - sha256sum -c kubectl.sha256
+      - chmod +x ./kubectl
   build:
     commands:
-      - kubectl config view
-      - kubectl get deploy,svc,ingress -n "${REPO_NAME}-${ENVIRONMENT}"
-      - helm template application_chart
-      - |
-        helm upgrade -i accelerator application_chart/ \
-          -n "${REPO_NAME}-${ENVIRONMENT}" \
-          --debug --atomic \
-          --set environment="${ENVIRONMENT}" \
-          --set health_path="${HEALTH_PATH}" \
-          --set replicas=${REPLICAS} \
-          --set target_port=${TARGET_PORT} \
-          --set repo_name=${REPO_NAME} \
-          --set region_name=${REGION_NAME} \
-          --set certificate_arn=${CERTIFICATE_ARN} \
-          --set route53_zone_name=${ROUTE53_ZONE_NAME} \
-          --set image=${ENVIRONMENT_IMAGE} \
-          --set subnets="${SUBNETS}" \
-          --set security_groups="${SECURITY_GROUPS}"
+      - ./scripts/kubernetes/k8s.sh

@@ -2,20 +2,18 @@
 
 * [Architecture overview](./Report_Portal.md#architecture-overview)
 * [3 easy steps to get started with ReportPortal](./Report_Portal.md#3-easy-steps-to-get-started-with-ReportPortal)
-* [Integration with AWS Accelerator](./Report_Portal.md#integration-with-AWS-Accelerator)
+* [Integration with Project](./Report_Portal.md#integration-with-project)
 * [Integration examples for supported languages](./Report_Portal.md#integration-examples-for-supported-languages)
    * [Java](./Report_Portal.md#java)
    * [Python](./Report_Portal.md#python)
    * [Golang](./Report_Portal.md#golang)
-  
-<hr>
 
 ## Architecture overview
 
 ReportPortal is a service that provides increased capabilities to speed up results analysis and reporting using built-in analytic features.
 ReportPortal is a great addition to Continuous Integration and Continuous Testing process.
 Report Portal organized into multiple repositories.
-Application Core is based on micro-services architecture and includes the following mandatory services: structure
+Application Core is based on microservices architecture and includes the following mandatory services: structure
 
 ![rp_structure.png](pic/rp_structure.png)
 
@@ -24,27 +22,18 @@ Application Core is based on micro-services architecture and includes the follow
 You can find all the necessary information [here](https://reportportal.io/installation).
 
 
-##  Integration with AWS Accelerator
+## Integration with project
 
 You need to access the Report portal and find out the configuration parameters required for connection.
-![ci-cd.png](pic/rp_connection.png) 
+![ci-cd.png](pic/rp_connection.png)
 
-Write values for the next three parameters into the file [application_vars.yaml](../terragrunt_way/applications/example_application/application_vars.yml) 
-```
-#===================================== Report Portal =======================================#
-#All 3 parameters must be taken from the ReportPortal.
-rp_token_name = "/report/portal/token" # The path for the ReportPortal token in the AWS ParameterStore.
-rp_project    = "my_rp_project" # Name of a project in ReportPortal.
-rp_endpoint   = "https://reportportal.epam.com" # ReportPortal endpoint URL.
-```
-Put the value of the token from your Report Portal account into the file [parameter_store.yml](../terragrunt_way/parameter_store_example.yml).
-```
-#==================== Parameter Store Variables ===================#
-rp_token          = "xxxxxxxxxxxxxxxxxxxxxxxxx" # Token for Report Portal.
-```
-You need to put the file [sonar_report.py](docs/template config_files/scripts/sonar_report.py) into you application's test dirrectoryYou need to place the [sonar_report.py](docs/template config_files/scripts/sonar_report.py) file in your application's test directory in order to connect the Selenium test output to the report portal..
-In addition, you will need to enter the necessary variable values [pytest.ini](../docs/template_config_files/scripts/selenium_tests/pytest.ini) in the X file to connect the output of Pytest results and create wrappers in the tests themselves accordingly. You can find some examples in the file [tests.py](../docs/template_config_files/scripts/selenium_tests/tests.py).
-For additional options for supported languages, see the following paragraphs.
+- Put [scripts](../docs/template_config_files/scripts) folder to the application repository.
+- Write values for the Report Portal token `rp_token` to the file [app_parameter_store_example.hcl](../terragrunt-infrastructure-example/accelerator/accounts/aws_account_id/regions/example/setup_folder/applications/example/app_parameter_store_example.hcl).
+- rp_token_name = "" # The path for the ReportPortal token in the AWS ParameterStore will be defined automatically.
+- rp_project    = "my_rp_project" # Name of a project in ReportPortal.
+- rp_endpoint   = "https://reportportal.epam.com" # ReportPortal endpoint URL.
+- In the [scripts](../docs/template_config_files/scripts) directory for application in [sonar](../docs/template_config_files/scripts/sonar) and [selenium_tests](../docs/template_config_files/scripts/selenium_tests) folders define all variables for Pytest in `pytest.ini` file.
+
 
 ## Integration examples for supported languages
 ### Java
@@ -53,6 +42,7 @@ For additional options for supported languages, see the following paragraphs.
 
 ### Python
 * [client for Python](https://github.com/reportportal/client-Python)
+* [Pytest](https://github.com/reportportal/agent-python-pytest)
 
 ### Golang
 * [client for Golang](https://github.com/reportportal/goRP)

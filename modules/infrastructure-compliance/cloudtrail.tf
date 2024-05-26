@@ -1,3 +1,4 @@
+#======================= Module for infrastructure compliance ===========================#
 data "aws_caller_identity" "current" {}
 data "aws_partition" "current" {}
 
@@ -12,7 +13,7 @@ locals {
 #-----------------------#
 
 resource "aws_cloudwatch_log_group" "cloudwatch_log_group" {
-  name = "${var.organization_name}-cloudtrail"
+  name = "${var.project_name}-cloudtrail"
 }
 resource "aws_cloudwatch_log_stream" "cloudwatch_log_stream" {
   log_group_name = aws_cloudwatch_log_group.cloudwatch_log_group.name
@@ -178,7 +179,7 @@ POLICY
 #------------#
 
 resource "aws_cloudtrail" "cloudtrail" {
-  name                          = "${var.organization_name}-${local.account_id}-cloudtrail"
+  name                          = "${var.project_name}-${local.account_id}-cloudtrail"
   enable_log_file_validation    = true
   enable_logging                = true
   is_multi_region_trail         = var.multi_region_trail
@@ -217,21 +218,28 @@ resource "aws_cloudtrail" "cloudtrail" {
 #-------------------#
 
 resource "aws_s3_bucket" "cloudtrail_bucket" {
-  bucket        = "${var.organization_name}-cloudtrail-${local.account_id}-${var.region}"
+  bucket        = "${var.project_name}-cloudtrail-${local.account_id}-${var.region}"
   force_destroy = var.force_destroy
-  server_side_encryption_configuration {
-    rule {
-      apply_server_side_encryption_by_default {
-        kms_master_key_id = aws_kms_key.cloudtrail_kms_key.id
-        sse_algorithm     = "aws:kms"
-      }
-    }
-  }
-  versioning {
-    enabled = var.versioning
-  }
+
   tags = {
     Name = "CloudTrail bucket"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail_bucket.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = aws_kms_key.cloudtrail_kms_key.id
+    }
+  }
+}
+
+resource "aws_s3_bucket_versioning" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail_bucket.id
+  versioning_configuration {
+    status = var.versioning
   }
 }
 
@@ -257,16 +265,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "cloudtrail" {
   }
 }
 
-resource "aws_s3_bucket_acl" "versioning_bucket_acl" {
+resource "aws_s3_bucket_acl" "bucket_acl" {
   bucket = aws_s3_bucket.cloudtrail_bucket.id
   acl    = "private"
-}
-
-resource "aws_s3_bucket_versioning" "versioning" {
-  bucket = aws_s3_bucket.cloudtrail_bucket.id
-  versioning_configuration {
-    status = "Enabled"
-  }
 }
 
 #----------------------------#
@@ -285,8 +286,8 @@ data "aws_iam_policy_document" "bucket_policy_document" {
     }
   }
   statement {
-    actions   = ["s3:PutObject"]
-    effect    = "Allow"
+    actions = ["s3:PutObject"]
+    effect  = "Allow"
     resources = [
       "arn:aws:s3:::${aws_s3_bucket.cloudtrail_bucket.bucket}/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
     ]
@@ -311,7 +312,7 @@ resource "aws_s3_bucket_policy" "s3_bucket_policy" {
   depends_on = [aws_s3_bucket.cloudtrail_bucket]
 }
 
-resource "aws_s3_bucket_public_access_block" "private" {
+resource "aws_s3_bucket_public_access_block" "cloudtrail" {
   bucket                  = aws_s3_bucket.cloudtrail_bucket.id
   block_public_acls       = true
   block_public_policy     = true

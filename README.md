@@ -1,27 +1,28 @@
-<h1 align="center"> AWS native CI/CD accelerator </h1>
+<h1 align="center">AWS Cloud Native Pipelines (InfraPhoenix)</h1>
 
-* [AWS native CI/CD accelerator](./README.md)
+* [AWS Cloud Native Pipelines (InfraPhoenix)](./README.md)
   * [Introduction](./README.md#introduction)
   * [Architecture](./README.md#architecture)
+* [Quick User Guide](docs/quick_user_guide.md)
 * [Infrastructure deployment](docs/infra.md)
   * [Manual](docs/infra.md#manual)
   * [Semi-automatic](docs/infra.md#semi-automatic)
-* [Terraform Linters](docs/linters.md)
-  * [Infracost](docs/linters.md#infracost)
-  * [TFSec](docs/linters.md#TFSec)
-* [Distributed Load Testing on AWS Provisioning](docs/dlt.md)
-  * [Architecture overview](docs/dlt.md#architecture-overview)
-  * [DLT deployment](docs/dlt.md#dlt-deployment)
-* [SonarCloud configuration](docs/SonarCloud_configuration.md)  
-* [Infrastructure Compliance](docs/infrastructure_compliance.md)
-  * [AWS Config](docs/infrastructure_compliance.md#aws-config)
-  * [AWS CloudTrail](docs/infrastructure_compliance.md#aws-cloudtrail)
+* [Terraform Code Analysis Tools](docs/linters.md)
 * [CI/CD](docs/cicd.md)
   * [Continuous Integration](docs/cicd.md#continuous-integration)
   * [Continuous Delivery](docs/cicd.md#continuous-delivery)
+* [External database on AWS RDS for the application](docs/RDS_database.md)
+* [Application Variables](docs/app-vars.md)
+* [Distributed Load Testing on AWS Provisioning](docs/dlt.md)
+  * [Architecture overview](docs/dlt.md#architecture-overview)
+  * [DLT deployment](docs/dlt.md#dlt-deployment)
+* [Carrier](docs/carrier.md)
+* [SonarCloud configuration](docs/SonarCloud_configuration.md)
+* [Amazon CloudWatch Synthetics](docs/amazon-cloudwatch-synthes.md)
+* [Infrastructure Compliance](docs/infrastructure_compliance.md)
+  * [AWS Config](docs/infrastructure_compliance.md#aws-config)
+  * [AWS CloudTrail](docs/infrastructure_compliance.md#aws-cloudtrail)
 * [Notifications](docs/notifications.md)
-  * [Email](docs/notifications.md#email)
-  * [Microsoft Teams and Slack](docs/notifications.md#microsoft-teams-and-slack)
 * [Pull Request Analysis](docs/PRanalysis.md)
   * [GitHub/Bitbucket Pull Requests](docs/PRanalysis.md#githubbitbucket-pull-requests)
   * [CodeCommit Pull Requests](docs/PRanalysis.md#codecommit-pull-requests)
@@ -29,7 +30,7 @@
 * [Report Portal](docs/Report_Portal.md)
   * [Architecture overview](docs/Report_Portal.md#architecture-overview)
   * [3 easy steps to get started with ReportPortal](docs/Report_Portal.md#3-easy-steps-to-get-started-with-reportportal)
-  * [Integration with AWS Accelerator](docs/Report_Portal.md#integration-examples-for-supported-languages)
+  * [Integration with InfraPhoenix](docs/Report_Portal.md#integration-examples-for-supported-languages)
   * [Integration examples for supported languages](docs/Report_Portal.md#integration-examples-for-supported-languages)
 * [Application Code Hosting Platforms](docs/app-vcs.md)
   * [GitHub and Bitbucket](docs/app-vcs.md#github-and-bitbucket)
@@ -38,12 +39,14 @@
   * [Deploy to EC2](docs/app-envs.md#deploy-to-ec2)
   * [Deploy to ECS](docs/app-envs.md#deploy-to-ecs)
   * [Deploy to EKS](docs/app-envs.md#deploy-to-eks)
+* [AI Tools for IaC code](./docs/AI/ai_for_IaC.md)
+* [AI Tools for Applications repositories](./docs/AI/ai_for_app.md)
 
 <hr>
 
 ## Introduction
 
-AWS native CI/CD accelerator is a product that brings a unified CI/CD approach with testing best practices out of the box and helps to manage infrastructure with a focus on code quality and security. In addition, it absorbs EPAM’s years of experience in designing and implementing CI/CD solutions for numerous clients across different business domains and countries.
+AWS Cloud Native Pipelines (InfraPhoenix) is a product that brings a unified CI/CD approach with testing best practices out of the box and helps to manage infrastructure with a focus on code quality and security. In addition, it absorbs EPAM’s years of experience in designing and implementing CI/CD solutions for numerous clients across different business domains and countries.
 
 Key points:
 
@@ -59,32 +62,32 @@ Key points:
 
 ![General architecture](docs/pic/general-arch.png)
 
-Technologies used by AWS Accelerator:
+Technologies used by InfraPhoenix:
 
-|  #  |                       Feature                       |                                      Tools                                      |
-|:---:|:---------------------------------------------------:|:-------------------------------------------------------------------------------:|
-|  1  |                VCSs for IaC hosting                 |                      Bitbucket, <br/> GitHub,<br/> GitLab                       |
-|  2  |         VCSs for applications code hosting          |           AWS CodeCommit, <br/> Bitbucket,<br/> GitHub, <br/> GitLab            |
-|  3  |            Static code analysis for IaC             |            Checkov,<br/> Cloud Custodian,<br/> Regula, <br/> TFLint             |
-|  4  |        Static code analysis for applications        |                  AWS CodeGuru (Java, Python),<br/> SonarCloud                   |
-|  5  |                 Functional testing                  |                                    Selenium                                     |
-|  6  |                 Performance testing                 | Distributed Load Testing on AWS,<br/> CloudWatch and DLT Web UI (visualization) |
-|  7  |         Pull request analysis (SonarCloud)          |            AWS CodeCommit,<br/> Bitbucket,<br/> GitHub,<br/> GitLab             |
-|  8  |           Pull request automation for IaC           |                                    Atlantis                                     |
-|  9  |            Platform Events Notification             |         Failed (Successful) builds in AWS via<br/> Mail, MsTeams, Slack         |
-| 10  |                 Supported languages                 |                         Golang,<br/> Java,<br/> Python                          |
-| 11  |                        CI/CD                        |                                AWS CodePipeline                                 |
-| 12  |         Test results analysis and reporting         |                                  Report Portal                                  |
-| 13  |         Infrastructure Security Compliance          |                      Cloud Custodian,<br/> EPAM Custodian                       |
-| 14  | Infrastructure supported for application deployment |                                  EC2, ECS, EKS                                  |
+|  #  |                       Feature                       |                                                   Tools                                                    |
+|:---:|:---------------------------------------------------:|:----------------------------------------------------------------------------------------------------------:|
+|  1  |                VCSs for IaC hosting                 |                                    Bitbucket, <br/> GitHub,<br/> GitLab                                    |
+|  2  |         VCSs for applications code hosting          |                         AWS CodeCommit, <br/> Bitbucket,<br/> GitHub, <br/> GitLab                         |
+|  3  |            Static code analysis for IaC             |                                       Checkov,<br/> Regula, <br/> TFLin                                    |
+|  4  |        Static code analysis for applications        |                                                 SonarCloud                                                 |
+|  5  |                 Functional testing                  |                                      Selenium, AWS Canary-Synthetics                                       |
+|  6  |                 Performance testing                 |                             Distributed Load Testing on AWS,<br/> EPAM CARRIER                             |
+|  7  |         Pull request analysis (SonarCloud)          |                          AWS CodeCommit,<br/> Bitbucket,<br/> GitHub,<br/> GitLab                          |
+|  8  |           Pull request automation for IaC           |                                                  Atlantis                                                  |
+|  9  |            Platform Events Notification             |                                           Email, MsTeams, Slack                                            |
+| 10  |                 Supported languages                 |                                       Golang,<br/> Java,<br/> Python                                       |
+| 11  |                        CI/CD                        |                                              AWS CodePipeline                                              |
+| 12  |         Test results analysis and reporting         |                                               Report Portal                                                |
+| 13  |         Infrastructure Security Compliance          |                              Cloud Custodian,<br/> EPAM Syndicate Rule Engine                              |
+| 14  | Infrastructure supported for application deployment |                                               EC2, ECS, EKS                                                |
+| 15  |                       AI Tools                      | AI Handler for Static code analysis for IaC,<br/>AI Handler for Static code analysis for applications<br/> |
 
-The Accelerator supports:
+The InfraPhoenix supports:
 * [GitLab](https://gitlab.com/), [GitHub](https://github.com/) and [Bitbucket](https://bitbucket.org/) for IaC code hosting
 * [CodeCommit](https://aws.amazon.com/codecommit/), [GitHub](https://github.com/) and [Bitbucket](https://bitbucket.org/) for application code hosting ([see more](./docs/app-vcs.md))
 * [Terragrunt](https://terragrunt.gruntwork.io/), Infrastructure as Code tool
 * AWS:
     * CodeBuild, CodeDeploy, CodePipeline
-    * CodeGuru
     * EC2 (ALB, ASG)
     * ECS, ECR, EKS
     * IAM
@@ -100,12 +103,14 @@ The Accelerator supports:
 * [Infracost](https://www.infracost.io/), cloud cost estimation tool for Terraform in pull requests
 * [Report Portal](https://reportportal.io/) is a service that provides increased capabilities to speed up results analysis and reporting using built-in analytic features.
 
-To test CI/CD workflow Java and Golang applications can be used:
-* [java Spring Boot based application](https://github.com/spring-projects/spring-petclinic)
-* [golang task tracker](https://github.com/thewhitetulip/Tasks)
+To test CI/CD workflow Java, Golang and Python applications can be used:
+* [Spring Boot based application(Java)](https://github.com/spring-projects/spring-petclinic)
+* [Task tracker(Golang)](https://github.com/thewhitetulip/Tasks)
+* [Blog application(Python)](https://github.com/mazuraktaras/jwtblogpyapp)
 
 ## Further reading
 
 * [Infrastructure deployment](docs/infra.md)
+* [Linters and Static Code Analysis tools for Terraform, Infracost](docs/linters.md)
 * [CI/CD](docs/cicd.md)
 * [Application environments](docs/app-envs.md)

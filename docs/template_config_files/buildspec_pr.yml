@@ -1,45 +1,37 @@
-# Buildspec file for pull request analysis  launch.
 version: 0.2
 env:
-  parameter-store:        # it's better to use secrets manager here
-    LOGIN: "$SONAR_TOKEN"
+  parameter-store:
+    SONAR_TOKEN: "$SONAR_TOKEN_NAME"
+    RP_API_KEY: "$RP_TOKEN_NAME"
+    OPENAI_TOKEN: "$OPENAI_TOKEN_NAME"
+    GITHUB_TOKEN: "$GITHUB_TOKEN_NAME"
   variables:
-    ART_REPO_ID: ""
-    DOMAIN: ""
     REPO_NAME: ""
-    PROJECT: ""
+    PROJECT_KEY: ""
+    SONAR_URL: ""
     ORGANIZATION: ""
     CODEBUILD_RESOLVED_SOURCE_VERSION: ""
     QG_TIMEOUT: "300"
-    PR_PROVIDER: "GitHub"
+    SONAR_SCANNER_VERSION: "5.0.1.3006"
+    LLM_MODEL: ""
+    OPENAI_API_ENDPOINT: ""
 
 phases:
   install:
-    runtime-versions:
-      java: corretto11
     commands:
+      # Add commands to install dependencies for your specific application language
+      - pip install -r scripts/ai/requirements.txt -qq
       - APP_DIR="/opt/${REPO_NAME}"
       - mkdir -p "${APP_DIR}"
       - ln -s "${CODEBUILD_SRC_DIR}" "${APP_DIR}"
-      - curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add -
-      - apt-get update > /dev/null
-      - apt-get install -y jq > /dev/null
-      - cd /tmp
-      - wget -q https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.4.0.2170-linux.zip && printf "Download completed."
-      - printf "Unziping downloaded file..."
-      - unzip sonar-scanner-cli-4.4.0.2170-linux.zip > /dev/null && printf "Unzip completed."
-      - rm sonar-scanner-cli-4.4.0.2170-linux.zip
-      - export PATH=$PATH:/tmp/sonar-scanner-4.4.0.2170-linux/bin
-
-  pre_build:
-    commands:
-#   You can add your unit tests here
-#      #Uncomment to add unit testing
-#      - go get -t ./...
-#      # Vet examines Go source code and reports suspicious constructs
-#      - go vet ./...
-#      # Run unit tests
-#      - go test ./...
+      - curl -fsSL https://dl.yarnpkg.com/debian/pubkey.gpg | gpg --dearmor | tee /etc/apt/trusted.gpg.d/yarn-archive-keyring.gpg > /dev/null
+      - curl -fsSL https://apt.corretto.aws/corretto.key | gpg --dearmor | tee /etc/apt/trusted.gpg.d/corretto-archive-keyring.gpg > /dev/null
+      - apt-get update -qq
+      - export SONAR_SCANNER_HOME=$HOME/.sonar/sonar-scanner-$SONAR_SCANNER_VERSION-linux
+      - curl --create-dirs -sSLo $HOME/.sonar/sonar-scanner.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-$SONAR_SCANNER_VERSION-linux.zip
+      - unzip -qq -o $HOME/.sonar/sonar-scanner.zip -d $HOME/.sonar/
+      - export PATH=$SONAR_SCANNER_HOME/bin:$PATH
+      - export SONAR_SCANNER_OPTS="-server"
 
   build:
     commands:
@@ -47,19 +39,26 @@ phases:
       - export PULL_NUM=$(printf $CODEBUILD_WEBHOOK_TRIGGER | awk 'BEGIN{FS="/"} {print $2}')
       - export BASE_REF=$(printf $CODEBUILD_WEBHOOK_BASE_REF | awk 'BEGIN{FS="/"} {print $3}')
       - |
-          sonar-scanner \
-          -Dsonar.qualitygate.wait="true" \
-          -Dsonar.qualitygate.timeout=${QG_TIMEOUT} \
-          -Dsonar.pullrequest.provider=${PR_PROVIDER} \
-          -Dsonar.scm.revision=${CODEBUILD_RESOLVED_SOURCE_VERSION} \
-          -Dsonar.organization=${ORGANIZATION} \
-          -Dsonar.projectKey="${PROJECT}-${REPO_NAME}" \
-          -Dsonar.login=${LOGIN} \
-          -Dsonar.host.url="https://sonarcloud.io" \
-          -Dsonar.pullrequest.base=${BASE_REF} \
-          -Dsonar.pullrequest.branch=${CODEBUILD_WEBHOOK_HEAD_REF} \
-          -Dsonar.pullrequest.key=${PULL_NUM} \
-          -Dsonar.pullrequest.github.repository=${ORGANIZATION}/${REPO_NAME}  > /dev/null
-      - API_URL="https://sonarcloud.io/api/qualitygates/project_status?projectKey=${PROJECT}-${REPO_NAME}"
-      - curl -s -u "${LOGIN}:" ${API_URL} > result.json
-      - cat result.json | json_pp
+        sonar-scanner \
+         -Dsonar.qualitygate.wait="true" \
+         -Dsonar.qualitygate.timeout=${QG_TIMEOUT} \
+         -Dsonar.pullrequest.provider=${PR_PROVIDER} \
+         -Dsonar.scm.revision=${CODEBUILD_RESOLVED_SOURCE_VERSION} \
+         -Dsonar.organization=${ORGANIZATION} \
+         -Dsonar.projectKey="${PROJECT_KEY}" \
+         -Dsonar.token=${SONAR_TOKEN} \
+         -Dsonar.host.url=${SONAR_URL} \
+         -Dsonar.pullrequest.base=${BASE_REF} \
+         -Dsonar.pullrequest.branch=${CODEBUILD_WEBHOOK_HEAD_REF} \
+         -Dsonar.pullrequest.key=${PULL_NUM} \
+         -Dsonar.pullrequest.github.repository=${ORGANIZATION}/${REPO_NAME}
+
+  post_build:
+    commands:
+      - if [ $CODEBUILD_BUILD_SUCCEEDING -eq 0 ] && [ -n "$OPENAI_TOKEN" ]; then python ${CODEBUILD_SRC_DIR}/scripts/ai/sonar_handler.py; fi
+      - |
+        python3 -m pytest  ${CODEBUILD_SRC_DIR}/scripts/sonar/sonar_report.py \
+        -k "not quality_gate_status_check" --reportportal \
+        --tb=no --rp-launch="${REPO_NAME} SONAR PR-${PULL_NUM}" \
+        --rp-launch-description="${REPO_NAME} SONAR PR-${PULL_NUM}: ${SONAR_URL}/summary/new_code?id=${PROJECT_KEY}&pullRequest=${PULL_NUM}"
+      - python3 ${CODEBUILD_SRC_DIR}/scripts/sonar/sonar_report.py --status-check

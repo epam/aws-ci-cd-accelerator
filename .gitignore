@@ -61,9 +61,19 @@ infra/ansible/roles/test/*
 tf.out
 **/.terraform.lock.hcl
 **/.terragrunt-cache/*
-**/gitlab.tfvars
-terragrunt_way/parameter_store.yml
+# Sensetive ParameterStore Paramiters
+**/parameter_store.hcl
+**/app_parameter_store.hcl
+# Sensetive SecretsManager Secrets
+**/app_secrets_manager.hcl
+error.log
+error_raw.log
 
+# Python virtual environment libraries
+**/error_handeling
 
+# Regula log file
+regula_report.log
 
-
+# Archive of the Syndicate EPAM rules engine
+**/c7ncli-5.0.0.tar.gz

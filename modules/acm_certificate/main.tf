@@ -1,11 +1,11 @@
-# SSL/TLS certificate in North Virginia for Accelerator DLT test Cloudfront CNAME
+#======================= SSL/TLS certificate in North Virginia for Accelerator DLT test CloudFront CNAME =======================#
 data "aws_route53_zone" "poc" {
   name = var.route53_zone_name
 }
 
 resource "aws_acm_certificate" "acm" {
-  domain_name               = var.route53_zone_name
-  validation_method         = "DNS"
+  domain_name       = var.route53_zone_name
+  validation_method = "DNS"
   subject_alternative_names = [
     "*.${var.route53_zone_name}"
   ]
@@ -21,7 +21,7 @@ resource "aws_route53_record" "example" {
       record = dvo.resource_record_value
       type   = dvo.resource_record_type
     }
-   # Skips the domain if it doesn't contain a wildcard
+    ##====================== Skips the domain if it doesn't contain a wildcard ======================##
     if length(regexall("\\*\\..+", dvo.domain_name)) > 0
   }
 

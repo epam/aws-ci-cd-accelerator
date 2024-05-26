@@ -1,58 +1,62 @@
 version: 3
 automerge: true
+parallel_apply: true
+parallel_plan: true
 projects:
+  - &template_ci_cd
+    dir: template_ci_cd
+    workflow: terragrunt
+    autoplan:
+      enabled: false
+      when_modified:
+        - "../../../../../../../../../modules/accelerator/**/*.tf"
+        - "**/*.hcl"
+  - &template_infra
+    dir: template_infra
+#    apply_requirements: [approved]
+    workflow: terragrunt
+    autoplan:
+      enabled: true
+      when_modified:
+        - "../../../../../../../../modules/application-infrastructure/**/*.tf"
+        - "**/*.hcl"
 
-- dir: terragrunt_way/applications/py_application
-  workflow: terragrunt
-  autoplan:
-    when_modified: [ "../../../modules/**/*.tf", "../../common_vars.yml", "application_vars.yml", "terragrunt.hcl" ]
-    enabled: false
+  - <<: *template_ci_cd
+    dir: terragrunt-infrastructure-<"my-region-1">/accelerator/accounts/<"aws_account_id">/regions/<"my-region-1">/applications/<"application-1">/ci-cd
 
-- dir: terragrunt_way/applications/go_application
-  workflow: terragrunt
-  autoplan:
-    when_modified: [ "../../../modules/**/*.tf", "../../common_vars.yml", "application_vars.yml", "terragrunt.hcl" ]
-    enabled: false
-
-- dir: terragrunt_way/applications/java_application
-  workflow: terragrunt
-  autoplan:
-    when_modified: [ "../../../modules/**/*.tf", "../../common_vars.yml", "application_vars.yml", "terragrunt.hcl" ]
-    enabled: false
+  - <<: *template_infra
+    dir: terragrunt-infrastructure-<"my-region-1">/application-infrastructure/<"application-1">/accounts/dev/regions/<"my-region-1">/infrastructure-module
 
 # https://www.runatlantis.io/docs/server-side-repo-config.html#allow-repos-to-define-their-own-workflows
 workflows:
   terragrunt: #================= Terragrunt Workflow =============================#
     plan:
       steps:
+      # change branches
         - env:
             name: BASE_BRANCH_NAME
             value: main
         - env:
+            name: HEAD_BRANCH_NAME
+            value: develop
+        - env:
             name: DESTROY_PARAMETER
             command: if [ "$COMMENT_ARGS" = "\-\d\e\s\t\r\o\y" ]; then echo "-destroy"; else echo ""; fi
         - env:
-            name: TF_VAR_auth_token
-            command: 'aws ssm get-parameter --name "/vcs/user/token" --with-decryption | jq .Parameter.Value -r'
-        - env:
-            name: TF_VAR_sonarcloud_token
-            command: 'aws ssm get-parameter --name "/sonar/token" --with-decryption | jq .Parameter.Value -r'
-        - env:
-            name: TF_VAR_teams_web_hook
-            command: 'aws ssm get-parameter --name "/teams/web/hook" --with-decryption | jq .Parameter.Value -r'
-        - env:
-            name: TF_VAR_slack_web_hook
-            command: 'aws ssm get-parameter --name "/slack/web/hook" --with-decryption | jq .Parameter.Value -r'
+            name: GIT_TOKEN
+            command: 'aws ssm get-parameter --name "/atlantis/git/user/token" --with-decryption | jq .Parameter.Value -r'
         - env:
             name: INFRACOST_API_KEY
             command: 'aws ssm get-parameter --name "/infracost/api/key" --with-decryption | jq .Parameter.Value -r'
-
+        - env:
+            name: OPENAI_TOKEN
+            command: 'aws ssm get-parameter --name "/accelerator/openai_token" --with-decryption | jq .Parameter.Value -r'
         - env:
             name: INFRACOST
-            value: 1
-        - env: # If you want to use tflint, set the value to 1, otherwise 0.
-            name: TFLINT
             value: 0
+        - env:
+            name: INFRACOST_SKIP_UPDATE_CHECK
+            value: false
         - env: # If you want to use tfsec, set the value to 1, otherwise 0.
             name: TFSEC
             value: 0
@@ -61,62 +65,94 @@ workflows:
             value: 0
         - env: # If you want to use regula, set the value to 1, otherwise 0.
             name: REGULA
-            value: 1
+            value: 0
+        - env: # If we enable AI Handler
+            name: AI_HANDLER
+            value: 0
 
-        - run: atlantis version || true
-        - run: terraform version || true
+        - run: atlantis version
+        - run: terraform version
+        - run: terragrunt --version
         - run: infracost --version
-        - run: terragrunt validate
-        - run: terragrunt plan -out $PLANFILE $DESTROY_PARAMETER
+        - run: echo "y" | terragrunt init > /dev/null
+        - run: terragrunt validate -no-color 2> error_raw.log || cat error_raw.log | grep -iv -e 'tflint' -e "validate_tflint" > error.log
+        - run: |
+            if [ -s "error.log" ]; then
+              cat error.log
+              if [ $AI_HANDLER == 1 ]; then
+                aws s3 cp error.log s3://${STORAGE_BUCKET}/${BASE_REPO_NAME}/
+              fi
+              exit 1
+            fi
+        - run: terragrunt plan -out $PLANFILE $DESTROY_PARAMETER -no-color 2> error_raw.log || cat error_raw.log | grep -iv -e 'tflint' -e "validate_tflint" > error.log
+        - run: |
+            if [ -s "error.log" ]; then
+              cat error.log
+              if [ $AI_HANDLER == 1 ]; then
+                aws s3 cp error.log s3://${STORAGE_BUCKET}/${BASE_REPO_NAME}/
+              fi
+              exit 1
+            fi
+        - run: |
+            if [ $INFRACOST == 1 ]; then
+              echo "----------- Infracost Report -----------"
+              infracost breakdown --path=.
+            fi
         - run: terragrunt show -json $PLANFILE > $SHOWFILE
-        - run: if [ $TFLINT == 1 ];
-            then
-            echo "------ tflint report ------" && tflint --module; echo "-------------------------------------";
+        - run: |
+            if [ $CHECKOV == 1 ]; then
+              echo "----------------- Checkov Report --------------- "
+              cp /tmp/checkov_report.log /tmp/report.log
+              cat /tmp/report.log
+              echo "----------------------------------------------------------"
+              if [ $AI_HANDLER == 1 ]; then
+                echo "----------------- AI Analyzer Checkov Report --------- "
+                echo "\`\`\`"  # Open Markdown Code Block
+                source /home/atlantis/.venv/bin/activate
+                pip list | grep openai
+                python3 /home/atlantis/.atlantis/repos/${BASE_REPO_OWNER}/${BASE_REPO_NAME}/${PULL_NUM}/${WORKSPACE}/scripts_ai/sec_analyzer.py
+                deactivate
+                echo "\`\`\`"  # Close Markdown Code Block
+              fi
             fi
-
-        - run: if [ $CHECKOV == 1 ];
-            then
-            echo "------ Checkov Report ------" && checkov -d . --quiet; echo "-------------------------------------";
+        - run: |
+            if [ $TFSEC == 1 ]; then
+              echo "------------------- TFSec Report ------------------- "
+              cp /tmp/tfsec_report.log /tmp/report.log
+              cat /tmp/report.log
+              echo "----------------------------------------------------------"
+              if [ $AI_HANDLER == 1 ]; then
+                echo "----------------- AI Analyzer TFSec Report --------- "
+                echo "\`\`\`";
+                source /home/atlantis/.venv/bin/activate;
+                pip list | grep openai
+                python3 /home/atlantis/.atlantis/repos/${BASE_REPO_OWNER}/${BASE_REPO_NAME}/${PULL_NUM}/${WORKSPACE}/scripts_ai/sec_analyzer.py
+                deactivate
+                echo "\`\`\`"
+              fi
             fi
-
-        - run: if [ $TFSEC == 1 ];
-            then
-            echo "------ TFSec Report ------" && tfsec --no-colour --soft-fail --concise-output --exclude AWS005 . ; echo "-------------------------------------";
+        - run: |
+            if [ $REGULA == 1 ]; then
+              regula run -t tf-plan $SHOWFILE > /tmp/report.log
+              echo "\`\`\`"
+              cat /tmp/report.log
+              if [ $AI_HANDLER == 1 ]; then
+                echo "-------- Regula Report. Checking with OpenAI ---------"
+                source /home/atlantis/.venv/bin/activate
+                python3 /home/atlantis/.atlantis/repos/${BASE_REPO_OWNER}/${BASE_REPO_NAME}/${PULL_NUM}/${WORKSPACE}/scripts_ai/sec_analyzer.py
+                deactivate
+                echo "\`\`\`"
+              fi
             fi
-        - run: if [ $REGULA == 1 ];
-            then
-            echo "------ Regula Report ------" &&  regula run  -t tf-plan $SHOWFILE ; echo "-------------------------------------";
-            fi
-        - run: if [ $INFRACOST == 1 ];
-            then
-            echo "------ Infracost Report ------" && infracost breakdown --path $SHOWFILE ; echo "-------------------------------------";
-            fi
-
     apply:
       steps:
-        - env:
-            name: TF_VAR_auth_token
-            command: 'aws ssm get-parameter --name "/vcs/user/token" --with-decryption | jq .Parameter.Value -r'
-        - env:
-            name: TF_VAR_sonarcloud_token
-            command: 'aws ssm get-parameter --name "/sonar/token" --with-decryption | jq .Parameter.Value -r'
-        - env:
-            name: TF_VAR_teams_web_hook
-            command: 'aws ssm get-parameter --name "/teams/web/hook" --with-decryption | jq .Parameter.Value -r'
-        - env:
-            name: TF_VAR_slack_web_hook
-            command: 'aws ssm get-parameter --name "/slack/web/hook" --with-decryption | jq .Parameter.Value -r'
-
         - env: # If you want to use cloud custodian, set the value to 1, otherwise 0.
             name: CUSTODIAN
             value: 0
 
-        - env: # EPAM Custodian variables; set the value to 1 to use, otherwise 0.
+        - env: # EPAM Syndicate Rule Engine variables; set the value to 1 to use, otherwise 0.
             name: C7N_EPAM
             value: 0
-        - env:
-            name: CUSTODIAN_ROLE
-            value: 'aws ssm get-parameter --name "/custodian/role/arn"  | jq .Parameter.Value -r'
         - env:
             name: C7N_PASSWORD
             command: 'aws ssm get-parameter --name "/C7N/PASSWORD" --with-decryption | jq .Parameter.Value -r'
@@ -127,9 +163,21 @@ workflows:
             name: C7N_USER
             command: 'aws ssm get-parameter --name "/C7N/user" --with-decryption | jq .Parameter.Value -r'
         - env:
-            name: ACCOUNT_NAME
-            value: atlantis
-        - run: terragrunt apply $PLANFILE
+            name: GIT_TOKEN
+            command: 'aws ssm get-parameter --name "/atlantis/git/user/token" --with-decryption | jq .Parameter.Value -r'
+        - env:
+            name: OPENAI_TOKEN
+            command: 'aws ssm get-parameter --name "/accelerator/openai_token" --with-decryption | jq .Parameter.Value -r'
+
+        - run: terragrunt apply $PLANFILE -no-color 2> error.log
+        - run: |
+            if [ -s "error.log" ]; then
+              cat error.log
+              if [ $AI_HANDLER == 1 ]; then
+                aws s3 cp error.log s3://${STORAGE_BUCKET}/${BASE_REPO_NAME}/
+              fi
+              exit 1
+            fi
         - run: if [ $CUSTODIAN == 1 ];
             then
             echo "------ Cloud Custodian Report ------" && custodian run --output-dir=. /home/atlantis/.atlantis/repos/${BASE_REPO_OWNER}/${BASE_REPO_NAME}/${PULL_NUM}/${WORKSPACE}/custodian.yml && echo "-------------------------------------";
@@ -137,5 +185,5 @@ workflows:
 
         - run: if [ $C7N_EPAM == 1 ];
             then
-            echo "------ EPAM Custodian Report ------" && timeout 600 /home/atlantis/.atlantis/repos/${BASE_REPO_OWNER}/${BASE_REPO_NAME}/${PULL_NUM}/${WORKSPACE}/custodian.sh && echo "-------------------------------------";
+            echo "------ EPAM Syndicate Rule Report ------" && timeout 600 /home/atlantis/.atlantis/repos/${BASE_REPO_OWNER}/${BASE_REPO_NAME}/${PULL_NUM}/${WORKSPACE}/custodian.sh && echo "-------------------------------------";
             fi

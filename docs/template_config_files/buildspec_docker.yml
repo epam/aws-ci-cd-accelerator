@@ -1,0 +1,71 @@
+# Buildspec for creating docker image
+version: 0.2
+env:
+  git-credential-helper: yes
+  variables:
+    BUCKET: ""
+    IMAGE_REPO_NAME: ""
+    AWS_ACCOUNT_ID: ""
+    TRIVY_SEVERITY: ""
+phases:
+
+  pre_build:
+    commands:
+      - printf Logging in to Amazon ECR...
+      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+      - printf "$BUCKET/$IMAGE_REPO_NAME/"
+      - aws s3 cp --recursive s3://$BUCKET/$IMAGE_REPO_NAME/ .
+      - wget -q https://github.com/aquasecurity/trivy/releases/download/v0.18.3/trivy_0.18.3_Linux-64bit.tar.gz
+      - tar zxvf trivy_0.18.3_Linux-64bit.tar.gz
+  build:
+    commands:
+      - git describe --exact-match --tags HEAD;TAG_EXISTS=$?
+      - echo $TAG_EXISTS
+      - |
+        if [ $TAG_EXISTS -eq 0 ]; then
+        #This condition checks the value of the TAG_EXISTS variable. If the value is 0 (meaning the tag exists)
+          echo "Tag already exists for this commit. Stop running the script."
+          NEW_TAG=$TAG_EXISTS
+        else
+          latest_tag=$(git describe --tags --abbrev=0 || true);
+          echo "Latest tag: $latest_tag"
+          if [ -z "$latest_tag" ]; then
+            echo "No git tags in repository. Creating tag v0.1.0";
+            latest_tag="v0.1.0";
+          fi
+          if ! echo "$latest_tag" | egrep -q "^v[0-9]+\.[0-9]+\.[0-9]+$"; then
+            echo "Error: git tag $latest_tag doesn't match semver format vX.Y.Z";
+            exit 1;
+          fi
+
+          NEW_TAG=$(echo "$latest_tag" | awk -F. '{$NF = $NF + 1;} 1' | sed 's/ /./g');
+          echo "New version/tag is $NEW_TAG";
+
+          git tag "$NEW_TAG";
+          git push origin --tags;
+
+         fi
+      - printf Building the Docker image...
+      - docker build -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$IMAGE_REPO_NAME:$NEW_TAG --build-arg APP_VERSION=$NEW_TAG .
+      - |
+        if [ -z "${TRIVY_SEVERITY}" ]; then
+          ./trivy image $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$IMAGE_REPO_NAME:$NEW_TAG;
+        else
+          ./trivy image --no-progress --severity ${TRIVY_SEVERITY} --exit-code 1 $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$IMAGE_REPO_NAME:$NEW_TAG;
+        fi
+
+      - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$IMAGE_REPO_NAME:$NEW_TAG
+      - printf '{"ImageURI":"%s"}'  $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$IMAGE_REPO_NAME:$NEW_TAG  > imageDetail.json
+  post_build:
+    commands:
+      cat imageDetail.json
+
+artifacts:
+  files:
+    - 'scripts/**/*'
+    - 'buildspec*'
+    - 'image*.json'
+    - 'appspec_ecs.yml'
+    - 'imageDetail.json'
+    - 'taskdef*.json'
+  discard-paths: no

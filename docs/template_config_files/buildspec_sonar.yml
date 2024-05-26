@@ -1,0 +1,52 @@
+version: 0.2
+env:
+  parameter-store:
+    LOGIN: "$SONAR_TOKEN"
+    RP_API_KEY: "$RP_TOKEN_NAME"
+  variables:
+    REPO_NAME: ""
+    PROJECT_KEY: ""
+    SONAR_URL: ""
+    ORGANIZATION: ""
+    CODEBUILD_RESOLVED_SOURCE_VERSION: ""
+    QG_TIMEOUT: "300"
+    SONAR_SCANNER_VERSION: "5.0.1.3006"
+
+phases:
+  install:
+    commands:
+      - APP_DIR="/opt/${REPO_NAME}"
+      - mkdir -p "${APP_DIR}"
+      - ln -s "${CODEBUILD_SRC_DIR}" "${APP_DIR}"
+      - curl -fsSL https://dl.yarnpkg.com/debian/pubkey.gpg | gpg --dearmor | tee /etc/apt/trusted.gpg.d/yarn-archive-keyring.gpg > /dev/null
+      - curl -fsSL https://apt.corretto.aws/corretto.key | gpg --dearmor | tee /etc/apt/trusted.gpg.d/corretto-archive-keyring.gpg > /dev/null
+      - apt-get update -qq
+      - pip install -r scripts/sonar/requirements.txt -qq
+      - export SONAR_SCANNER_HOME=$HOME/.sonar/sonar-scanner-$SONAR_SCANNER_VERSION-linux
+      - curl --create-dirs -sSLo $HOME/.sonar/sonar-scanner.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-$SONAR_SCANNER_VERSION-linux.zip
+      - unzip -qq -o $HOME/.sonar/sonar-scanner.zip -d $HOME/.sonar/
+      - export PATH=$SONAR_SCANNER_HOME/bin:$PATH
+      - export SONAR_SCANNER_OPTS="-server"
+
+  build:
+    commands:
+      - cd "${APP_DIR}"
+      - |
+        sonar-scanner \
+         -Dsonar.qualitygate.wait="true" \
+         -Dsonar.qualitygate.timeout=${QG_TIMEOUT} \
+         -Dsonar.pullrequest.provider=${PR_PROVIDER} \
+         -Dsonar.scm.revision=${CODEBUILD_RESOLVED_SOURCE_VERSION} \
+         -Dsonar.organization=${ORGANIZATION} \
+         -Dsonar.projectKey="${PROJECT_KEY}" \
+         -Dsonar.login=${LOGIN} \
+         -Dsonar.host.url=${SONAR_URL}  > /dev/null
+  post_build:
+    commands:
+      - |
+        python3 -m pytest  ${CODEBUILD_SRC_DIR}/scripts/sonar/sonar_report.py \
+        -k "not quality_gate_status_check" --reportportal \
+        --tb=no --rp-launch="${REPO_NAME} SONAR" \
+        --rp-launch-description="${REPO_NAME} SONAR: ${SONAR_URL}/summary/new_code?id=${PROJECT_KEY}"
+
+      - python3 ${CODEBUILD_SRC_DIR}/scripts/sonar/sonar_report.py --status-check

@@ -1,10 +1,8 @@
-<h1 align="center"> Application environments </h1> 
+<h1 align="center">Application environments</h1>
 
-  * [Deploy to EC2](./app-envs.md#deploy-to-EC2)
-  * [Deploy to ECS](./app-envs.md#deploy-to-ECS)
-  * [Deploy to EKS](./app-envs.md#deploy-to-EKS)
-
-<hr>
+  * [Deploy to EC2](./app-envs.md#deploy-to-ec2)
+  * [Deploy to ECS](./app-envs.md#deploy-to-ecs)
+  * [Deploy to EKS](./app-envs.md#deploy-to-eks)
 
 ![Application environments](pic/app-envs.png)
 
@@ -26,3 +24,5 @@ CodeDeploy is responsible for the following:
 
 * Helm Chart is updated from CodeBuild
 * Each pipeline's stage has its own `namespace` on the EKS cluster.
+
+#### [Previous page](./cicd.md)

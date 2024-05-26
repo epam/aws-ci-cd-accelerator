@@ -4,7 +4,6 @@
 stages:
   - sonar_MR
   - mirror
-  
 
 variables:
 ## Check if all variables are set as pipeline variables in GitLab (Settings>CI/CD>Variables).
@@ -99,7 +98,7 @@ mirror:
   allow_failure: true
   before_script:
 ## Install ssh-agent if not already installed.
-   - 'command -v ssh-agent >/dev/null || ( apt-get update -y >/dev/null && apt-get install openssh-client git -y >/dev/null )'
+   - 'command -v ssh-agent >/dev/null || ( apt-get update -y -qq && apt-get install openssh-client git -y -qq )'
 
 ## Run ssh-agent (inside the build environment).
    - eval $(ssh-agent -s)

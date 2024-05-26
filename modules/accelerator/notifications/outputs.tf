@@ -1,3 +1,4 @@
 output "approve_sns_arn" {
-  value = aws_sns_topic.notif.arn
+  description = "The ARN of the SNS Topic"
+  value       = aws_sns_topic.notif.arn
 }

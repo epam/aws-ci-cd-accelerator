@@ -1,0 +1,5 @@
+requests
+GitPython
+pytest
+pytest-reportportal
+reportportal-client

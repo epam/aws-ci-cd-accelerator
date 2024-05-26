@@ -1,4 +1,4 @@
-# CodeBuild Section for the Package stage
+#======================= CodeBuild for the Unit tests stage =======================#
 resource "aws_cloudwatch_log_group" "unit" {
   name              = "/aws/codebuild/${var.repo_name}-${var.region_name}-unit"
   retention_in_days = 7
@@ -16,22 +16,15 @@ resource "aws_codebuild_project" "unit_project" {
   }
 
   environment {
-    compute_type    = var.build_compute_type
-    image           = var.build_image
-    type            = "LINUX_CONTAINER"
-    privileged_mode = var.build_privileged_override
-
-    environment_variable {
-      name  = "RP_ENDPOINT"
-      value = var.rp_endpoint
-    }
-    environment_variable {
-      name  = "RP_TOKEN_NAME"
-      value = var.rp_token_name
-    }
-    environment_variable {
-      name  = "RP_PROJECT"
-      value = var.rp_project
+    compute_type = var.build_compute_type
+    image        = var.build_image
+    type         = "LINUX_CONTAINER"
+    dynamic "environment_variable" {
+      for_each = var.report_portal_environments
+      content {
+        name  = environment_variable.value["name"]
+        value = environment_variable.value["value"]
+      }
     }
   }
   vpc_config {
@@ -42,7 +35,7 @@ resource "aws_codebuild_project" "unit_project" {
 
   source {
     type      = "CODEPIPELINE"
-    buildspec = var.unit_buildspec
+    buildspec = var.buildspec_unit
   }
   logs_config {
     cloudwatch_logs {

@@ -1,0 +1,15 @@
+version: 0.2
+env:
+  parameter-store:
+    AUTH_TOKEN: "$CARRIER_TOKEN_NAME"
+  variables:
+    CARRIER_URL: ""
+    PROJECT_ID: ""
+    TEST_ID: ""
+phases:
+  build:
+    commands:
+      - echo "Running Carrier test"
+      - |
+        docker run -e project_id=$PROJECT_ID -e galloper_url=$CARRIER_URL \
+        -e token=$AUTH_TOKEN getcarrier/control_tower:beta-1.0 --test_id=$TEST_ID

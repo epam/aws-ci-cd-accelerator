@@ -1,0 +1,41 @@
+repos:
+  - repo: https://github.com/antonbabenko/pre-commit-terraform  # Use pre-commit-terraform repository
+    rev: v1.88.0  # Use specific version of the hooks
+    hooks:
+      - id: terraform_fmt  # This hook reformats Terraform configuration files to adhere to HashiCorp's standards
+      - id: terraform_docs  # This hook generates Terraform documentation
+        args:
+          - --hook-config=--path-to-file=README.md  # Path to the file where the documentation will be written
+          - --hook-config=--add-to-existing-file=true  # If set to true, the documentation will be added to the existing file
+          - --hook-config=--create-file-if-not-exist=true  # If set to true, the file for documentation will be created if it doesn't exist
+          - --hook-config=--use-standard-markers=true  # If set to true, standard markers will be used in the documentation
+          - '--args=--lockfile=false'  # If set to false, the lockfile will not be used in the documentation
+      - id: terraform_tflint  # This hook runs tflint, a linter for Terraform
+        args:
+          # The following arguments specify the rules for tflint to check. Only these rules will be checked
+          - '--args=--only=terraform_deprecated_interpolation'
+          - '--args=--only=terraform_deprecated_index'
+          - '--args=--only=terraform_unused_declarations'
+          - '--args=--only=terraform_comment_syntax'
+          - '--args=--only=terraform_documented_outputs'
+          - '--args=--only=terraform_documented_variables'
+          - '--args=--only=terraform_typed_variables'
+          - '--args=--only=terraform_module_pinned_source'
+          - '--args=--only=terraform_naming_convention'
+          - '--args=--only=terraform_required_version'
+          - '--args=--only=terraform_required_providers'
+          - '--args=--only=terraform_standard_module_structure'
+          - '--args=--only=terraform_workspace_remote'
+          - '--args=--only=terraform_unused_required_providers'
+      - id: terraform_validate  # This hook validates the syntax of Terraform files
+        exclude: modules/core/distributed_load_testing/  # This argument excludes a specific module from the validation
+        args:
+          - --hook-config=--retry-once-with-cleanup=true  # If set to true, the validation will be retried once with cleanup if it fails
+          - '--args=-no-color'  # If set to true, color will be omitted in the output
+          - --hook-config=--parallelism-limit=1  # This sets the limit for the number of concurrent operations
+  - repo: https://github.com/pre-commit/pre-commit-hooks  # Use pre-commit-hooks repository
+    rev: v4.5.0  # Use specific version of the hooks
+    hooks:
+      - id: check-merge-conflict  # This hook checks for merge conflicts
+      - id: end-of-file-fixer  # This hook ensures files end with a newline
+      - id: trailing-whitespace  # This hook checks for trailing whitespaces

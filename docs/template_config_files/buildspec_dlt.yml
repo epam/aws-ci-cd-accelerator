@@ -1,4 +1,3 @@
-# Buildspec file for "Distributed Load Testing in AWS Provisioning".
 version: 0.2
 env:
   parameter-store:
@@ -6,26 +5,29 @@ env:
     RP_TOKEN: "$RP_TOKEN_NAME"
   shell: bash
   variables:
-    EXPECT_SUCCESS_RATE: 95
-    SUCCESS_P95: 99
+    TEST_NAME: ""
+    TEST_ID: ""
+    TEST_TYPE: ""
+    TASK_COUNT: ""
+    CONCURRENCY: ""
+    RAMP_UP: ""
+    HOLD_FOR: ""
     APP_TARGET_URL: ""
     COGNITO_USER: ""
     DLT_UI_URL: ""
     DLT_ALIAS: ""
     DLT_API_HOST: ""
-    AWS_REGION: ""
     COGNITO_USER_POOL_ID: ""
     COGNITO_CLIENT_ID: ""
     COGNITO_IDENTITY_POOL_ID: ""
+    EXPECT_SUCCESS_RATE: "95"
+    SUCCESS_P95: "1"
     RP_ENDPOINT: ""
     RP_PROJECT: ""
-    RP_LAUNCH_NAME: "<MY-APP> DLT TEST"
-    RP_LAUNCH_DOC: "DLT Test for <MY-APP> Application"
 
 phases:
   install:
     commands:
-      - pip3 install pytest-reportportal
       - pip3 install reportportal-client==5.3.5 -q
   build:
     commands:

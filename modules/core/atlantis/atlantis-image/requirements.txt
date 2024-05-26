@@ -1,0 +1,4 @@
+PyGithub
+GitPython
+requests
+openai==1.13.3

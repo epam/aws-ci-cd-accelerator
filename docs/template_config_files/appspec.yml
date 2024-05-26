@@ -1,13 +1,16 @@
 # Appspec file for CodeDeploy EC2 deployment.
 version: 0.0
 os: linux
-
 files:
   - source: /
-    destination: /opt/application
+    destination: /opt/install
 
 hooks:
+  BeforeInstall:
+    - location: ./scripts/install_dependences.sh
+      timeout: 300
+      runas: root
   ApplicationStart:
-    - location: install.sh
+    - location: ./scripts/install.sh
       timeout: 300
       runas: root

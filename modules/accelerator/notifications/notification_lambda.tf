@@ -1,26 +1,33 @@
+#======================= Lambda function for notifications =======================#
 data "archive_file" "this" {
   type        = "zip"
   source_file = "${path.module}/${var.lambda_file}"
   output_path = "${path.module}/${var.lambda_zip_file}"
 }
-
+resource "aws_sqs_queue" "dlq" {
+  name = "${var.repo_name}-lambda_msTeams-dlq"
+}
 
 resource "aws_lambda_function" "this" {
   filename      = "${path.module}/${var.lambda_zip_file}"
-  function_name = "${var.repo_name}-${var.region_name}-lambda_msTeams"
+  function_name = "${var.repo_name}-lambda_msTeams"
   role          = aws_iam_role.lambda.arn
   handler       = "notification_lambda.lambda_handler"
+  dead_letter_config {
+    target_arn = aws_sqs_queue.dlq.arn
+  }
+  source_code_hash = data.archive_file.this.output_base64sha256
 
-  #  source_code_hash = filebase64sha256("${path.module}/${var.lambda_zip_file}")
-
-  runtime = "python3.8"
+  runtime = "python3.11"
 
   environment {
     variables = {
-      DEBUG          = "false"
-      TEAMS_HOOK_URL = var.teams_web_hook
-      SLACK_HOOK_URL = var.slack_web_hook
+      DEBUG     = "false"
+      REPO_NAME = var.repo_name
     }
+  }
+  tracing_config {
+    mode = "Active"
   }
   vpc_config {
     security_group_ids = var.security_groups
